@@ -8,10 +8,19 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AO3 Offline Reader</title>
 
+  <!-- PWA Manifest Link -->
+  <link rel="manifest" href="manifest.json">
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- JSZip for EPUB Extraction -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- PDF.js for PDF Extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    // Configure PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -41,46 +50,23 @@
   </script>
 
   <style>
-    /* Native App Feel Fixes */
     body {
       -webkit-tap-highlight-color: transparent;
       user-select: none;
       touch-action: manipulation;
     }
-    
-    .selectable-text {
-      user-select: text;
-    }
-
-    ::-webkit-scrollbar {
-      width: 4px;
-      height: 4px;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(144, 0, 0, 0.4);
-      border-radius: 4px;
-    }
-
-    /* AO3 Rating Colors */
+    .selectable-text { user-select: text; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: rgba(144, 0, 0, 0.4); border-radius: 4px; }
     .rating-badge {
-      width: 22px;
-      height: 22px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 10px;
-      border-radius: 4px;
-      color: white;
-      flex-shrink: 0;
+      width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 10px; border-radius: 4px; color: white; flex-shrink: 0;
     }
     .rating-G { background-color: #2e7d32; }
     .rating-T { background-color: #e65100; }
     .rating-M { background-color: #c62828; }
     .rating-E { background-color: #880e4f; }
     .rating-NR { background-color: #616161; }
-
-    /* Reader Theme Layouts */
     .theme-default { background-color: #ffffff; color: #0f172a; }
     .theme-dark { background-color: #0f172a; color: #e2e8f0; }
     .theme-dark a { color: #f87171; }
@@ -88,25 +74,16 @@
     .theme-sepia a { color: #900000; }
     .theme-oled { background-color: #000000; color: #d4d4d4; }
     .theme-oled a { color: #ef4444; }
-
-    .reader-body p {
-      margin-bottom: 1.25em;
-    }
+    .reader-body p { margin-bottom: 1.25em; }
     .reader-body blockquote {
-      border-left: 3px solid #900000;
-      padding-left: 0.75rem;
-      margin-left: 0;
-      opacity: 0.85;
-      font-style: italic;
+      border-left: 3px solid #900000; padding-left: 0.75rem; margin-left: 0; opacity: 0.85; font-style: italic;
     }
   </style>
 </head>
 <body class="bg-slate-200 text-slate-900 min-h-screen flex justify-center items-center p-0 sm:p-4 font-sans">
 
-  <!-- MAIN APP CONTAINER -->
   <div class="w-full max-w-md h-screen sm:h-[844px] bg-slate-50 flex flex-col shadow-2xl sm:rounded-3xl overflow-hidden relative border border-slate-300">
 
-    <!-- STANDARD APP BAR -->
     <header id="standard-app-bar" class="bg-ao3-red text-white px-4 py-3 flex items-center justify-between shadow-md shrink-0 z-20">
       <div class="flex items-center space-x-2.5">
         <div class="bg-white text-ao3-red p-1 rounded-md shadow">
@@ -132,7 +109,6 @@
       </div>
     </header>
 
-    <!-- SELECTION MODE TOP BAR -->
     <header id="selection-app-bar" class="hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between shadow-md shrink-0 z-20">
       <div class="flex items-center space-x-3">
         <button onclick="exitSelectionMode()" class="p-1 hover:bg-slate-800 rounded-full text-slate-300">
@@ -151,7 +127,6 @@
       </div>
     </header>
 
-    <!-- SEARCH PANEL -->
     <div id="search-panel" class="hidden bg-red-950 px-4 py-2 shrink-0 shadow-inner z-20">
       <div class="relative flex items-center">
         <input type="text" id="search-input" oninput="applyFilters()" placeholder="Search title, author, fandom, pairing, tags..." class="w-full pl-9 pr-8 py-1.5 text-xs rounded-full bg-white text-slate-800 focus:outline-none">
@@ -162,10 +137,7 @@
       </div>
     </div>
 
-    <!-- MAIN SCROLLABLE LIBRARY -->
     <main class="flex-1 overflow-y-auto px-3 py-3 space-y-3 relative pb-20" id="main-feed">
-      
-      <!-- Toolbar Stats & Sort -->
       <div class="flex items-center justify-between text-xs text-slate-500 bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
         <span>Stored: <strong id="work-count-text" class="text-ao3-red">0</strong> works</span>
         <div class="flex items-center gap-1.5">
@@ -180,26 +152,20 @@
         </div>
       </div>
 
-      <!-- Drag & Drop / Upload Dropzone Container -->
       <div id="dropzone" class="border-2 border-dashed border-red-300 bg-red-50/50 rounded-xl p-4 text-center cursor-pointer transition hover:bg-red-50" onclick="triggerFileInput()">
         <i data-lucide="folder-plus" class="w-7 h-7 text-ao3-red mx-auto mb-1"></i>
-        <p class="text-xs font-semibold text-ao3-red">Tap or Drag & Drop AO3 .EPUB files</p>
+        <p class="text-xs font-semibold text-ao3-red">Tap or Drag & Drop .EPUB or .PDF files</p>
         <p class="text-[10px] text-slate-400 mt-0.5">Files persist in device IndexedDB automatically</p>
       </div>
 
-      <!-- Story Cards Container -->
-      <div id="fic-card-container" class="space-y-3">
-        <!-- Rendered dynamically -->
-      </div>
+      <div id="fic-card-container" class="space-y-3"></div>
     </main>
 
-    <!-- FAB IMPORT BUTTON -->
     <label for="epub-input" class="absolute bottom-16 right-4 bg-ao3-red hover:bg-ao3-redHover text-white p-3.5 rounded-full shadow-xl cursor-pointer transition transform active:scale-95 z-30 flex items-center justify-center border border-red-700">
       <i data-lucide="plus" class="w-6 h-6"></i>
     </label>
-    <input type="file" id="epub-input" accept=".epub" multiple class="hidden" onchange="handleEPUBUpload(event)">
+    <input type="file" id="epub-input" accept=".epub,.pdf" multiple class="hidden" onchange="handleFileUpload(event)">
 
-    <!-- BOTTOM ANDROID NAV BAR -->
     <nav class="bg-white border-t border-slate-200 h-14 shrink-0 flex items-center justify-around z-20 text-[11px] font-medium text-slate-500">
       <button onclick="switchTab('library')" id="nav-tab-library" class="flex flex-col items-center justify-center w-full h-full text-ao3-red">
         <i data-lucide="library" class="w-5 h-5 mb-0.5"></i>
@@ -215,10 +181,7 @@
       </button>
     </nav>
 
-    <!-- READER FULLSCREEN VIEW -->
     <div id="reader-view" class="absolute inset-0 bg-white z-50 overflow-y-auto hidden flex flex-col theme-default transition-colors duration-150">
-      
-      <!-- Reader App Bar -->
       <header class="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-between gap-2 shadow-sm">
         <div class="flex items-center gap-2 min-w-0">
           <button onclick="closeReaderView()" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition">
@@ -227,15 +190,11 @@
           <span id="reader-top-title" class="font-serif font-bold text-xs truncate max-w-[130px]"></span>
         </div>
 
-        <!-- Chapter Nav -->
         <div class="flex items-center gap-1">
           <button onclick="navigateChapter(-1)" id="btn-prev-chap" class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30">
             <i data-lucide="chevron-left" class="w-4 h-4"></i>
           </button>
-
-          <select id="reader-chapter-dropdown" onchange="onChapterSelect(this.value)" class="text-xs border border-slate-300 dark:border-slate-700 rounded px-1 py-1 max-w-[110px] bg-transparent focus:outline-none">
-          </select>
-
+          <select id="reader-chapter-dropdown" onchange="onChapterSelect(this.value)" class="text-xs border border-slate-300 dark:border-slate-700 rounded px-1 py-1 max-w-[110px] bg-transparent focus:outline-none"></select>
           <button onclick="navigateChapter(1)" id="btn-next-chap" class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30">
             <i data-lucide="chevron-right" class="w-4 h-4"></i>
           </button>
@@ -246,7 +205,6 @@
         </button>
       </header>
 
-      <!-- Reader Settings Sheet -->
       <div id="reader-settings-panel" class="hidden sticky top-10 z-40 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-3 shadow-md space-y-3 text-xs">
         <div>
           <label class="block text-[10px] font-bold text-slate-400 mb-1">THEME</label>
@@ -278,85 +236,47 @@
         </div>
       </div>
 
-      <!-- MAIN READING AREA -->
       <div class="flex-1 px-4 py-5 max-w-2xl mx-auto w-full">
-        <!-- Story Metadata Header -->
         <div id="reader-meta-header" class="mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 space-y-2">
           <h1 id="reader-title" class="text-xl font-serif font-bold text-center text-ao3-red leading-tight"></h1>
           <p id="reader-author" class="text-center text-xs opacity-75 font-medium"></p>
           <div id="reader-tags-box" class="bg-black/5 dark:bg-white/5 p-3 rounded-lg text-[11px] space-y-1 mt-3"></div>
           <div id="reader-summary-box" class="italic text-xs opacity-90 border-l-2 border-ao3-red pl-2.5 my-2"></div>
         </div>
-
-        <!-- Rendered Chapter Body HTML -->
-        <article id="reader-content-body" class="reader-body selectable-text font-serif text-base leading-relaxed">
-        </article>
-
-        <!-- Chapter Bottom Bar -->
+        <article id="reader-content-body" class="reader-body selectable-text font-serif text-base leading-relaxed"></article>
         <div class="flex justify-between items-center my-8 pt-3 border-t border-slate-200 dark:border-slate-800">
-          <button onclick="navigateChapter(-1)" id="btn-bottom-prev" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">
-            &larr; Previous Chapter
-          </button>
-          <button onclick="document.getElementById('reader-view').scrollTo({top: 0, behavior: 'smooth'})" class="text-[11px] opacity-70 underline">
-            Top
-          </button>
-          <button onclick="navigateChapter(1)" id="btn-bottom-next" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">
-            Next Chapter &rarr;
-          </button>
+          <button onclick="navigateChapter(-1)" id="btn-bottom-prev" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">&larr; Previous Chapter</button>
+          <button onclick="document.getElementById('reader-view').scrollTo({top: 0, behavior: 'smooth'})" class="text-[11px] opacity-70 underline">Top</button>
+          <button onclick="navigateChapter(1)" id="btn-bottom-next" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">Next Chapter &rarr;</button>
         </div>
       </div>
-
     </div>
 
-    <!-- FILTER MODAL -->
     <div id="filter-modal" class="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center hidden">
       <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
         <div class="flex justify-between items-center border-b pb-2">
           <h3 class="font-serif font-bold text-base text-ao3-red flex items-center gap-1.5">
             <i data-lucide="filter" class="w-4 h-4"></i> Filter Works
           </h3>
-          <button onclick="closeFilterModal()" class="text-slate-400 hover:text-slate-600">
-            <i data-lucide="x" class="w-5 h-5"></i>
-          </button>
+          <button onclick="closeFilterModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
         </div>
-
         <div>
           <label class="block text-xs font-bold uppercase text-slate-500 mb-2">Rating</label>
           <div class="space-y-1.5 text-xs">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" value="General Audiences" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()">
-              <span class="rating-badge rating-G">G</span> General Audiences
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" value="Teen And Up Audiences" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()">
-              <span class="rating-badge rating-T">T</span> Teen And Up Audiences
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" value="Mature" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()">
-              <span class="rating-badge rating-M">M</span> Mature
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" value="Explicit" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()">
-              <span class="rating-badge rating-E">E</span> Explicit
-            </label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" value="General Audiences" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()"><span class="rating-badge rating-G">G</span> General Audiences</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" value="Teen And Up Audiences" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()"><span class="rating-badge rating-T">T</span> Teen And Up Audiences</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" value="Mature" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()"><span class="rating-badge rating-M">M</span> Mature</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" value="Explicit" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()"><span class="rating-badge rating-E">E</span> Explicit</label>
           </div>
         </div>
-
         <div>
           <label class="block text-xs font-bold uppercase text-slate-500 mb-1.5">Completion</label>
           <div class="grid grid-cols-3 gap-1.5 text-xs">
-            <label class="border p-2 rounded text-center cursor-pointer flex items-center justify-center gap-1">
-              <input type="radio" name="completion-filter" value="all" checked onchange="applyFilters()"> All
-            </label>
-            <label class="border p-2 rounded text-center cursor-pointer flex items-center justify-center gap-1">
-              <input type="radio" name="completion-filter" value="complete" onchange="applyFilters()"> Complete
-            </label>
-            <label class="border p-2 rounded text-center cursor-pointer flex items-center justify-center gap-1">
-              <input type="radio" name="completion-filter" value="wip" onchange="applyFilters()"> In Progress
-            </label>
+            <label class="border p-2 rounded text-center cursor-pointer flex items-center justify-center gap-1"><input type="radio" name="completion-filter" value="all" checked onchange="applyFilters()"> All</label>
+            <label class="border p-2 rounded text-center cursor-pointer flex items-center justify-center gap-1"><input type="radio" name="completion-filter" value="complete" onchange="applyFilters()"> Complete</label>
+            <label class="border p-2 rounded text-center cursor-pointer flex items-center justify-center gap-1"><input type="radio" name="completion-filter" value="wip" onchange="applyFilters()"> In Progress</label>
           </div>
         </div>
-
         <div>
           <label class="block text-xs font-bold uppercase text-slate-500 mb-1.5">Word Count</label>
           <div class="flex items-center gap-2">
@@ -365,7 +285,6 @@
             <input type="number" id="max-words-input" placeholder="Max" onchange="applyFilters()" class="w-1/2 p-2 text-xs border rounded-md">
           </div>
         </div>
-
         <div class="flex justify-between items-center pt-2 border-t">
           <button onclick="resetFilters()" class="text-xs text-slate-500 underline font-medium">Reset</button>
           <button onclick="closeFilterModal()" class="px-4 py-2 bg-ao3-red text-white text-xs font-bold rounded-lg">Done</button>
@@ -373,29 +292,22 @@
       </div>
     </div>
 
-    <!-- STORAGE / SETTINGS MODAL -->
     <div id="storage-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
       <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-xl">
         <div class="flex justify-between items-center border-b pb-2">
           <h3 class="font-serif font-bold text-base text-ao3-red flex items-center gap-1.5">
             <i data-lucide="hard-drive" class="w-4 h-4"></i> Storage & Persistence
           </h3>
-          <button onclick="closeStorageModal()" class="text-slate-400 hover:text-slate-600">
-            <i data-lucide="x" class="w-5 h-5"></i>
-          </button>
+          <button onclick="closeStorageModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
         </div>
-
         <div class="space-y-2 text-xs text-slate-600">
-          <p>This app uses <strong>IndexedDB</strong> to store full EPUB contents directly inside your device's browser database.</p>
+          <p>This app uses <strong>IndexedDB</strong> to store full EPUB & PDF contents directly inside your device's browser database.</p>
           <div class="bg-slate-100 p-2.5 rounded-lg space-y-1">
             <div class="flex justify-between"><span>Stored Works:</span> <strong id="stat-works-count">0</strong></div>
             <div class="flex justify-between"><span>IndexedDB Status:</span> <strong class="text-green-600">Active</strong></div>
           </div>
-          <button onclick="clearIndexedDB()" class="w-full py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 mt-2">
-            Delete All Library Data
-          </button>
+          <button onclick="clearIndexedDB()" class="w-full py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 mt-2">Delete All Library Data</button>
         </div>
-
         <div class="flex justify-end pt-2">
           <button onclick="closeStorageModal()" class="px-4 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-md">Close</button>
         </div>
@@ -405,7 +317,6 @@
   </div>
 
   <script>
-    // --- INDEXEDDB IMPLEMENTATION ---
     const DB_NAME = 'AO3OfflineReaderDB';
     const DB_VERSION = 1;
     const STORE_WORKS = 'works';
@@ -414,13 +325,10 @@
     let activeWork = null;
     let activeChapIndex = 0;
     let deferredPWAInstallPrompt = null;
-
-    // Selection Mode State
     let selectionMode = false;
     let selectedWorkIds = new Set();
     let longPressTimer = null;
 
-    // Initialize Database
     function initDB() {
       return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -430,10 +338,7 @@
             dbInstance.createObjectStore(STORE_WORKS, { keyPath: 'id' });
           }
         };
-        request.onsuccess = (e) => {
-          db = e.target.result;
-          resolve(db);
-        };
+        request.onsuccess = (e) => { db = e.target.result; resolve(db); };
         request.onerror = (e) => reject(e);
       });
     }
@@ -461,7 +366,7 @@
     }
 
     function deleteWorkFromDB(id) {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         const tx = db.transaction(STORE_WORKS, 'readwrite');
         const store = tx.objectStore(STORE_WORKS);
         store.delete(id);
@@ -478,21 +383,16 @@
       });
     }
 
-    // --- APP INITIALIZATION ---
     window.onload = async function() {
       lucide.createIcons();
       setupDragAndDrop();
       registerInlineServiceWorker();
-
       try {
         await initDB();
         await refreshLibrary();
-      } catch(e) {
-        console.error("IndexedDB initialization error", e);
-      }
+      } catch(e) { console.error(e); }
     };
 
-    // --- SERVICE WORKER & PWA REGISTRATION ---
     function registerInlineServiceWorker() {
       if ('serviceWorker' in navigator) {
         const swCode = `
@@ -504,7 +404,6 @@
         `;
         const blob = new Blob([swCode], { type: 'application/javascript' });
         const swUrl = URL.createObjectURL(blob);
-        // FIX: Added a scope path to prevent ServiceWorker registration issues on GitHub Pages subpaths
         navigator.serviceWorker.register(swUrl, { scope: './' }).catch(() => {});
       }
 
@@ -525,24 +424,19 @@
       }
     }
 
-    // --- EPUB PARSER ENGINE ---
-    function triggerFileInput() {
-      document.getElementById('epub-input').click();
-    }
-
+    function triggerFileInput() { document.getElementById('epub-input').click(); }
     function setupDragAndDrop() {
       const dropzone = document.getElementById('dropzone');
-      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropzone.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+        dropzone.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
       });
       dropzone.addEventListener('drop', (e) => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
+        const files = e.dataTransfer.files;
         if (files && files.length) processFiles(files);
       });
     }
 
-    function handleEPUBUpload(event) {
+    function handleFileUpload(event) {
       const files = event.target.files;
       if (files && files.length) processFiles(files);
     }
@@ -551,9 +445,70 @@
       for (let file of files) {
         if (file.name.endsWith('.epub')) {
           await parseAndStoreEPUB(file);
+        } else if (file.name.endsWith('.pdf')) {
+          await parseAndStorePDF(file);
         }
       }
       await refreshLibrary();
+    }
+
+    async function parseAndStorePDF(file) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdfDoc = await loadingTask.promise;
+        
+        let title = file.name.replace('.pdf', '');
+        let author = "PDF Document";
+        let summary = "<p>Imported PDF Document.</p>";
+        let chapters = [];
+        let totalWords = 0;
+
+        // Extract text page by page (treating each page or blocks as pages/chapters)
+        const pageSize = 5; // Group every 5 pages into a "chapter" to keep chunks readable
+        let currentChapterText = "";
+        let chapterCount = 1;
+
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          const page = await pdfDoc.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(item => item.str).join(' ');
+          
+          totalWords += pageText.trim().split(/\s+/).filter(Boolean).length;
+          currentChapterText += `<p>${escapeHTML(pageText)}</p>`;
+
+          if (i % pageSize === 0 || i === pdfDoc.numPages) {
+            chapters.push({
+              title: `Part ${chapterCount}`,
+              content: currentChapterText
+            });
+            currentChapterText = "";
+            chapterCount++;
+          }
+        }
+
+        const workRecord = {
+          id: 'work-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+          title: title,
+          author: author,
+          rating: 'Not Rated',
+          fandoms: ['PDF Document'],
+          relationships: [],
+          characters: [],
+          tags: ['PDF'],
+          summary: summary,
+          words: totalWords,
+          chaptersCount: chapters.length || 1,
+          isComplete: true,
+          dateAdded: new Date().toISOString(),
+          lastReadChapter: 0,
+          chapters: chapters.length ? chapters : [{ title: 'Document', content: '<p>Empty PDF.</p>' }]
+        };
+
+        await saveWorkToDB(workRecord);
+      } catch (e) {
+        console.error("PDF parse error", e);
+      }
     }
 
     async function parseAndStoreEPUB(file) {
@@ -563,18 +518,12 @@
         let author = "Unknown Author";
         let summary = "";
         let rating = "Not Rated";
-        let fandoms = [];
-        let relationships = [];
-        let characters = [];
-        let tags = [];
-        let chapters = [];
+        let fandoms = [], relationships = [], characters = [], tags = [], chapters = [];
         let totalWords = 0;
 
         const htmlFiles = [];
         zip.forEach((path, entry) => {
-          if (!entry.isDirectory && (path.endsWith('.html') || path.endsWith('.xhtml'))) {
-            htmlFiles.push(path);
-          }
+          if (!entry.isDirectory && (path.endsWith('.html') || path.endsWith('.xhtml'))) { htmlFiles.push(path); }
         });
         htmlFiles.sort();
 
@@ -583,7 +532,6 @@
           const parser = new DOMParser();
           const doc = parser.parseFromString(contentText, 'text/html');
 
-          // Extract metadata from first chapter or metadata tags
           if (i === 0 || contentText.includes('Fandom:')) {
             const getMeta = (lbl) => {
               const nodes = Array.from(doc.querySelectorAll('dt, b, strong'));
@@ -601,20 +549,16 @@
             const r = getMeta('Relationship:') || getMeta('Relationships:'); if (r) relationships = r.split(',').map(s => s.trim());
             const c = getMeta('Char:') || getMeta('Characters:'); if (c) characters = c.split(',').map(s => s.trim());
             const t = getMeta('Tags:'); if (t) tags = t.split(',').map(s => s.trim());
-
             const sumNode = doc.querySelector('blockquote') || doc.querySelector('.summary');
             if (sumNode) summary = sumNode.innerHTML;
           }
 
           if (doc.body) {
             const rawText = doc.body.textContent || '';
-            const words = rawText.trim().split(/\s+/).filter(Boolean).length;
-            totalWords += words;
-
+            totalWords += rawText.trim().split(/\s+/).filter(Boolean).length;
             let cTitle = `Chapter ${chapters.length + 1}`;
             const header = doc.querySelector('h1, h2, h3');
             if (header && header.textContent.trim()) cTitle = header.textContent.trim();
-
             chapters.push({ title: cTitle, content: doc.body.innerHTML });
           }
         }
@@ -638,12 +582,9 @@
         };
 
         await saveWorkToDB(workRecord);
-      } catch (e) {
-        console.error("EPUB parse error", e);
-      }
+      } catch (e) { console.error("EPUB parse error", e); }
     }
 
-    // --- LIBRARY RENDER ENGINE ---
     async function refreshLibrary() {
       loadedWorks = await fetchWorksFromDB();
       renderLibraryUI();
@@ -661,12 +602,10 @@
           <div class="bg-white rounded-xl p-6 text-center border border-slate-200">
             <i data-lucide="book-open" class="w-8 h-8 text-slate-300 mx-auto mb-2"></i>
             <p class="text-xs text-slate-500 font-semibold">No works match your current filters or library is empty.</p>
-          </div>
-        `;
+          </div>`;
         lucide.createIcons();
         return;
       }
-
       container.innerHTML = filtered.map(work => createFicCardHTML(work)).join('');
       lucide.createIcons();
     }
@@ -688,12 +627,10 @@
           const inTag = w.tags.some(t => t.toLowerCase().includes(query));
           if (!inTitle && !inAuthor && !inFandom && !inRel && !inTag) return false;
         }
-
         if (checkedRatings.length > 0 && !checkedRatings.includes(w.rating)) return false;
         if (completion === 'complete' && !w.isComplete) return false;
         if (completion === 'wip' && w.isComplete) return false;
         if (w.words < minW || w.words > maxW) return false;
-
         return true;
       }).sort((a, b) => {
         if (sortVal === 'dateAdded-desc') return new Date(b.dateAdded) - new Date(a.dateAdded);
@@ -716,14 +653,10 @@
 
       return `
         <article id="card-${work.id}" 
-          onmousedown="startLongPress('${work.id}')" 
-          onmouseup="cancelLongPress()" 
-          mouseleave="cancelLongPress()"
-          ontouchstart="startLongPress('${work.id}')" 
-          ontouchend="cancelLongPress()"
+          onmousedown="startLongPress('${work.id}')" onmouseup="cancelLongPress()" mouseleave="cancelLongPress()"
+          ontouchstart="startLongPress('${work.id}')" ontouchend="cancelLongPress()"
           onclick="handleCardClick(event, '${work.id}')"
           class="bg-white rounded-xl border ${isSelected ? 'border-ao3-red bg-red-50/30' : 'border-slate-200'} shadow-sm p-3.5 space-y-2 relative transition duration-150 cursor-pointer">
-          
           <div class="flex items-start justify-between gap-2">
             <div class="flex items-start gap-2">
               ${selectionMode ? `
@@ -732,35 +665,24 @@
                 </div>
               ` : `<span class="rating-badge ${rClass} mt-0.5">${rLabel}</span>`}
               <div>
-                <h3 class="font-serif font-bold text-sm text-ao3-red leading-snug">
-                  ${escapeHTML(work.title)}
-                </h3>
+                <h3 class="font-serif font-bold text-sm text-ao3-red leading-snug">${escapeHTML(work.title)}</h3>
                 <p class="text-[11px] text-slate-500">by ${escapeHTML(work.author)}</p>
               </div>
             </div>
-            
             ${!selectionMode ? `
               <div class="flex gap-1">
-                <button onclick="event.stopPropagation(); openReader('${work.id}')" class="px-2.5 py-1 bg-ao3-red text-white text-xs font-semibold rounded-lg shadow-sm">
-                  Read
-                </button>
+                <button onclick="event.stopPropagation(); openReader('${work.id}')" class="px-2.5 py-1 bg-ao3-red text-white text-xs font-semibold rounded-lg shadow-sm">Read</button>
               </div>
             ` : ''}
           </div>
-
           <div class="text-[11px] text-slate-700">
             <span class="text-slate-400">Fandom:</span> <strong>${work.fandoms.join(', ')}</strong>
           </div>
-
           <div class="flex flex-wrap gap-1 text-[10px]">
             ${work.relationships.map(r => `<span class="bg-red-50 text-ao3-tagRel border border-red-200 px-1.5 py-0.5 rounded font-medium">${escapeHTML(r)}</span>`).join('')}
             ${work.tags.map(t => `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">${escapeHTML(t)}</span>`).join('')}
           </div>
-
-          <div class="bg-slate-50 border-l-2 border-ao3-red p-2 rounded-r text-[11px] text-slate-600 italic line-clamp-3">
-            ${work.summary}
-          </div>
-
+          <div class="bg-slate-50 border-l-2 border-ao3-red p-2 rounded-r text-[11px] text-slate-600 italic line-clamp-3">${work.summary}</div>
           <div class="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t">
             <span>${work.words.toLocaleString()} words • ${work.chaptersCount} chap</span>
             <span>Progress: Chap ${work.lastReadChapter + 1}</span>
@@ -769,133 +691,80 @@
       `;
     }
 
-    // --- LONG PRESS & MULTI-SELECTION LOGIC ---
     function startLongPress(id) {
       cancelLongPress();
-      longPressTimer = setTimeout(() => {
-        enterSelectionMode(id);
-      }, 500);
+      longPressTimer = setTimeout(() => { enterSelectionMode(id); }, 500);
     }
-
     function cancelLongPress() {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
     }
-
     function enterSelectionMode(initialId) {
-      selectionMode = true;
-      selectedWorkIds.clear();
+      selectionMode = true; selectedWorkIds.clear();
       if (initialId) selectedWorkIds.add(initialId);
-
       document.getElementById('standard-app-bar').classList.add('hidden');
       document.getElementById('selection-app-bar').classList.remove('hidden');
-
       updateSelectionUI();
     }
-
     function exitSelectionMode() {
-      selectionMode = false;
-      selectedWorkIds.clear();
-
+      selectionMode = false; selectedWorkIds.clear();
       document.getElementById('selection-app-bar').classList.add('hidden');
       document.getElementById('standard-app-bar').classList.remove('hidden');
-
       renderLibraryUI();
     }
-
     function handleCardClick(event, id) {
-      if (selectionMode) {
-        event.stopPropagation();
-        toggleSelectWork(id);
-      } else {
-        openReader(id);
-      }
+      if (selectionMode) { event.stopPropagation(); toggleSelectWork(id); }
+      else { openReader(id); }
     }
-
     function toggleSelectWork(id) {
-      if (selectedWorkIds.has(id)) {
-        selectedWorkIds.delete(id);
-      } else {
-        selectedWorkIds.add(id);
-      }
-
-      if (selectedWorkIds.size === 0) {
-        exitSelectionMode();
-      } else {
-        updateSelectionUI();
-      }
+      if (selectedWorkIds.has(id)) { selectedWorkIds.delete(id); }
+      else { selectedWorkIds.add(id); }
+      if (selectedWorkIds.size === 0) exitSelectionMode();
+      else updateSelectionUI();
     }
-
     function toggleSelectAll() {
       const currentFiltered = getFilteredWorks();
-      if (selectedWorkIds.size === currentFiltered.length) {
-        selectedWorkIds.clear();
-      } else {
-        currentFiltered.forEach(w => selectedWorkIds.add(w.id));
-      }
+      if (selectedWorkIds.size === currentFiltered.length) { selectedWorkIds.clear(); }
+      else { currentFiltered.forEach(w => selectedWorkIds.add(w.id)); }
       updateSelectionUI();
     }
-
     function updateSelectionUI() {
       document.getElementById('selected-count-text').textContent = `${selectedWorkIds.size} selected`;
       const currentFiltered = getFilteredWorks();
       const allSelected = currentFiltered.length > 0 && selectedWorkIds.size === currentFiltered.length;
       document.getElementById('select-all-btn').textContent = allSelected ? 'Deselect All' : 'Select All';
-
       renderLibraryUI();
     }
-
     async function deleteSelectedWorks() {
       if (selectedWorkIds.size === 0) return;
-
-      const count = selectedWorkIds.size;
-      if (confirm(`Permanently delete ${count} selected story file(s) from device storage?`)) {
-        for (let id of selectedWorkIds) {
-          await deleteWorkFromDB(id);
-        }
+      if (confirm(`Permanently delete ${selectedWorkIds.size} selected story file(s) from device storage?`)) {
+        for (let id of selectedWorkIds) { await deleteWorkFromDB(id); }
         exitSelectionMode();
         await refreshLibrary();
       }
     }
-
-    async function deleteWork(id) {
-      if (confirm("Delete this story from device storage?")) {
-        await deleteWorkFromDB(id);
-        await refreshLibrary();
-      }
-    }
-
     async function clearIndexedDB() {
-      if (confirm("Permanently remove all local EPUB files?")) {
+      if (confirm("Permanently remove all local files?")) {
         await clearDB();
         await refreshLibrary();
         closeStorageModal();
       }
     }
 
-    // --- READER LOGIC & PROGRESS PERSISTENCE ---
     function openReader(workId) {
       activeWork = loadedWorks.find(w => w.id === workId);
       if (!activeWork) return;
-
       activeChapIndex = activeWork.lastReadChapter || 0;
-
       document.getElementById('reader-top-title').textContent = activeWork.title;
       document.getElementById('reader-title').textContent = activeWork.title;
       document.getElementById('reader-author').textContent = `by ${activeWork.author}`;
-
       document.getElementById('reader-tags-box').innerHTML = `
         <p><strong>Rating:</strong> ${activeWork.rating}</p>
         <p><strong>Fandoms:</strong> ${activeWork.fandoms.join(', ')}</p>
         <p><strong>Relationships:</strong> ${activeWork.relationships.join(', ') || 'None'}</p>
       `;
       document.getElementById('reader-summary-box').innerHTML = `<strong>Summary:</strong> ${activeWork.summary}`;
-
       const drop = document.getElementById('reader-chapter-dropdown');
       drop.innerHTML = activeWork.chapters.map((c, i) => `<option value="${i}">${c.title || `Chapter ${i+1}`}</option>`).join('');
-
       renderChapterBody();
       document.getElementById('reader-view').classList.remove('hidden');
     }
@@ -907,19 +776,14 @@
 
     async function renderChapterBody() {
       if (!activeWork || !activeWork.chapters[activeChapIndex]) return;
-
       const chap = activeWork.chapters[activeChapIndex];
       document.getElementById('reader-chapter-dropdown').value = activeChapIndex;
-
       document.getElementById('btn-prev-chap').disabled = (activeChapIndex === 0);
       document.getElementById('btn-next-chap').disabled = (activeChapIndex === activeWork.chapters.length - 1);
       document.getElementById('btn-bottom-prev').disabled = (activeChapIndex === 0);
       document.getElementById('btn-bottom-next').disabled = (activeChapIndex === activeWork.chapters.length - 1);
-
       document.getElementById('reader-content-body').innerHTML = chap.content;
       document.getElementById('reader-view').scrollTo({ top: 0, behavior: 'smooth' });
-
-      // Save bookmark reading progress to IndexedDB
       activeWork.lastReadChapter = activeChapIndex;
       await saveWorkToDB(activeWork);
     }
@@ -931,48 +795,28 @@
         renderChapterBody();
       }
     }
-
-    function onChapterSelect(val) {
-      activeChapIndex = parseInt(val);
-      renderChapterBody();
-    }
-
-    // --- CUSTOMIZER & UI MODALS ---
-    function toggleSearchBar() {
-      document.getElementById('search-panel').classList.toggle('hidden');
-    }
-
-    function clearSearch() {
-      document.getElementById('search-input').value = '';
-      applyFilters();
-    }
-
-    function toggleReaderSettings() {
-      document.getElementById('reader-settings-panel').classList.toggle('hidden');
-    }
-
+    function onChapterSelect(val) { activeChapIndex = parseInt(val); renderChapterBody(); }
+    function toggleSearchBar() { document.getElementById('search-panel').classList.toggle('hidden'); }
+    function clearSearch() { document.getElementById('search-input').value = ''; applyFilters(); }
+    function toggleReaderSettings() { document.getElementById('reader-settings-panel').classList.toggle('hidden'); }
     function setReaderTheme(theme) {
       const rv = document.getElementById('reader-view');
       rv.className = rv.className.replace(/theme-\w+/g, '');
       rv.classList.add(`theme-${theme}`);
     }
-
     function setReaderFont(fontClass) {
       const b = document.getElementById('reader-content-body');
       b.className = b.className.replace(/font-\w+/g, '');
       b.classList.add(fontClass);
     }
-
     function setReaderFontSize(sz) {
       document.getElementById('reader-content-body').style.fontSize = `${sz}px`;
       document.getElementById('font-size-label').textContent = `${sz}px`;
     }
-
     function openFilterModal() { document.getElementById('filter-modal').classList.remove('hidden'); }
     function closeFilterModal() { document.getElementById('filter-modal').classList.add('hidden'); }
     function openStorageModal() { document.getElementById('storage-modal').classList.remove('hidden'); }
     function closeStorageModal() { document.getElementById('storage-modal').classList.add('hidden'); }
-
     function applyFilters() { renderLibraryUI(); }
     function resetFilters() {
       document.getElementById('search-input').value = '';
@@ -982,7 +826,6 @@
       document.querySelector('input[name="completion-filter"][value="all"]').checked = true;
       renderLibraryUI();
     }
-
     function escapeHTML(s) {
       return s ? s.replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','&#39;':'&#39;','"':'&quot;'}[c])) : '';
     }
