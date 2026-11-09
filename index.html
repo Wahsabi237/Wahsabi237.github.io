@@ -1,396 +1,990 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>AO3 Offline Reader</title>
-    <!-- Inline Web App Manifest to enable Android PWA installation -->
-    <link rel="manifest" href='data:application/json;charset=utf-8,{"name":"AO3 Reader","short_name":"AO3","start_url":".","display":"standalone","background_color":"#f8f9fa","theme_color":"#990000"}'>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#900000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>AO3 Offline Reader</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- JSZip for EPUB Extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            ao3: {
+              red: '#900000',
+              redHover: '#700000',
+              bgLight: '#f4f4f6',
+              tagRel: '#900000',
+              tagChar: '#2a6496',
+            }
+          },
+          fontFamily: {
+            serif: ['Georgia', 'Cambria', 'serif'],
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['Courier New', 'monospace'],
+            dyslexic: ['Comic Sans MS', 'sans-serif']
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Native App Feel Fixes */
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+    }
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    </script>
-    <style>
-        :root {
-            --bg-color: #f8f9fa;
-            --card-bg: #ffffff;
-            --text-color: #333333;
-            --accent-color: #990000;
-            --border-color: #dee2e6;
-            --reader-bg: #fffdf9;
-            --reader-text: #2b2b2b;
-            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
+    .selectable-text {
+      user-select: text;
+    }
 
-        [data-theme="dark"] {
-            --bg-color: #121212;
-            --card-bg: #1e1e1e;
-            --text-color: #e0e0e0;
-            --accent-color: #cc3333;
-            --border-color: #333333;
-            --reader-bg: #181818;
-            --reader-text: #d0d0d0;
-        }
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(144, 0, 0, 0.4);
+      border-radius: 4px;
+    }
 
-        [data-theme="sepia"] {
-            --bg-color: #f4ecd8;
-            --card-bg: #faf6eb;
-            --text-color: #5f4b32;
-            --accent-color: #a6512c;
-            --border-color: #e3d3b5;
-            --reader-bg: #fbf0d9;
-            --reader-text: #4a3b2c;
-        }
+    /* AO3 Rating Colors */
+    .rating-badge {
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 10px;
+      border-radius: 4px;
+      color: white;
+      flex-shrink: 0;
+    }
+    .rating-G { background-color: #2e7d32; }
+    .rating-T { background-color: #e65100; }
+    .rating-M { background-color: #c62828; }
+    .rating-E { background-color: #880e4f; }
+    .rating-NR { background-color: #616161; }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-color); min-height: 100vh; display: flex; flex-direction: column; transition: background 0.3s, color 0.3s; }
+    /* Reader Theme Layouts */
+    .theme-default { background-color: #ffffff; color: #0f172a; }
+    .theme-dark { background-color: #0f172a; color: #e2e8f0; }
+    .theme-dark a { color: #f87171; }
+    .theme-sepia { background-color: #fbf0d9; color: #362b1b; }
+    .theme-sepia a { color: #900000; }
+    .theme-oled { background-color: #000000; color: #d4d4d4; }
+    .theme-oled a { color: #ef4444; }
 
-        header { background-color: var(--card-bg); border-bottom: 1px solid var(--border-color); padding: 1rem; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
-        h1 { font-size: 1.25rem; color: var(--accent-color); font-weight: 700; }
-
-        .toolbar { display: flex; gap: 0.5rem; align-items: center; }
-        button, label.btn-file { background: var(--accent-color); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem; text-decoration: none; }
-        button:active, label.btn-file:active { opacity: 0.8; }
-        
-        .btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
-
-        main { flex: 1; padding: 1rem; max-width: 800px; width: 100%; margin: 0 auto; }
-        
-        .search-filter { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        input[type="text"] { flex: 1; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--card-bg); color: var(--text-color); font-size: 0.95rem; }
-
-        .fic-list { display: flex; flex-direction: column; gap: 0.75rem; }
-        .fic-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 1rem; cursor: pointer; transition: transform 0.1s; position: relative; user-select: none; }
-        .fic-card.selecting { border-color: var(--accent-color); padding-left: 2.5rem; }
-        .fic-card .select-checkbox { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); display: none; width: 1.2rem; height: 1.2rem; accent-color: var(--accent-color); }
-        .fic-card.selecting .select-checkbox { display: block; }
-
-        .fic-title { font-size: 1.1rem; font-weight: 700; color: var(--accent-color); margin-bottom: 0.2rem; }
-        .fic-author { font-size: 0.9rem; opacity: 0.8; margin-bottom: 0.5rem; }
-        .fic-summary { font-size: 0.85rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9; }
-
-        /* Reader View */
-        #reader-view { display: none; position: fixed; inset: 0; background: var(--reader-bg); color: var(--reader-text); z-index: 200; flex-direction: column; }
-        .reader-header { padding: 0.75rem 1rem; background: var(--card-bg); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-        .reader-content { flex: 1; overflow-y: auto; padding: 1.5rem; max-width: 700px; margin: 0 auto; line-height: 1.8; font-size: 1.05rem; }
-        .reader-footer { padding: 0.75rem 1rem; background: var(--card-bg); border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-
-        /* Selection Toolbar Overlay */
-        #selection-bar { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); border-top: 2px solid var(--accent-color); padding: 1rem; z-index: 300; justify-content: space-between; align-items: center; box-shadow: 0 -4px 12px rgba(0,0,0,0.15); }
-        
-        .empty-state { text-align: center; padding: 3rem 1rem; opacity: 0.6; }
-    </style>
+    .reader-body p {
+      margin-bottom: 1.25em;
+    }
+    .reader-body blockquote {
+      border-left: 3px solid #900000;
+      padding-left: 0.75rem;
+      margin-left: 0;
+      opacity: 0.85;
+      font-style: italic;
+    }
+  </style>
 </head>
-<body>
+<body class="bg-slate-200 text-slate-900 min-h-screen flex justify-center items-center p-0 sm:p-4 font-sans">
 
-    <header>
-        <h1>AO3 Reader</h1>
-        <div class="toolbar">
-            <label class="btn-file" for="file-input">+ Import</label>
-            <input type="file" id="file-input" accept=".epub,.pdf" multiple style="display: none;">
-            <button class="btn-secondary" onclick="toggleTheme()">Theme</button>
+  <!-- MAIN APP CONTAINER -->
+  <div class="w-full max-w-md h-screen sm:h-[844px] bg-slate-50 flex flex-col shadow-2xl sm:rounded-3xl overflow-hidden relative border border-slate-300">
+
+    <!-- STANDARD APP BAR -->
+    <header id="standard-app-bar" class="bg-ao3-red text-white px-4 py-3 flex items-center justify-between shadow-md shrink-0 z-20">
+      <div class="flex items-center space-x-2.5">
+        <div class="bg-white text-ao3-red p-1 rounded-md shadow">
+          <i data-lucide="book-open" class="w-5 h-5 stroke-[2.5]"></i>
         </div>
+        <div>
+          <h1 class="font-serif text-lg font-bold leading-none tracking-wide">AO3 Offline</h1>
+          <p class="text-[10px] text-red-200 mt-0.5" id="storage-status-text">IndexedDB: Active</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-1">
+        <button onclick="toggleSearchBar()" class="p-2 hover:bg-red-800 rounded-full transition text-white">
+          <i data-lucide="search" class="w-5 h-5"></i>
+        </button>
+        <button onclick="openFilterModal()" class="p-2 hover:bg-red-800 rounded-full transition relative text-white">
+          <i data-lucide="sliders-horizontal" class="w-5 h-5"></i>
+          <span id="active-filter-indicator" class="hidden absolute top-1 right-1 bg-white text-ao3-red rounded-full text-[9px] w-3.5 h-3.5 font-bold flex items-center justify-center">!</span>
+        </button>
+        <button id="pwa-install-btn" onclick="promptPWAInstall()" class="hidden p-2 hover:bg-red-800 rounded-full transition text-yellow-300">
+          <i data-lucide="download" class="w-5 h-5"></i>
+        </button>
+      </div>
     </header>
 
-    <main>
-        <div class="search-filter">
-            <input type="text" id="search-box" placeholder="Search saved fics..." oninput="filterFics()">
+    <!-- SELECTION MODE TOP BAR -->
+    <header id="selection-app-bar" class="hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between shadow-md shrink-0 z-20">
+      <div class="flex items-center space-x-3">
+        <button onclick="exitSelectionMode()" class="p-1 hover:bg-slate-800 rounded-full text-slate-300">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+        <span id="selected-count-text" class="font-semibold text-sm">0 selected</span>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <button onclick="toggleSelectAll()" id="select-all-btn" class="text-xs px-2.5 py-1 bg-slate-800 rounded-md font-medium text-slate-200 hover:bg-slate-700">
+          Select All
+        </button>
+        <button onclick="deleteSelectedWorks()" class="p-2 bg-red-600 hover:bg-red-700 rounded-full text-white shadow">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- SEARCH PANEL -->
+    <div id="search-panel" class="hidden bg-red-950 px-4 py-2 shrink-0 shadow-inner z-20">
+      <div class="relative flex items-center">
+        <input type="text" id="search-input" oninput="applyFilters()" placeholder="Search title, author, fandom, pairing, tags..." class="w-full pl-9 pr-8 py-1.5 text-xs rounded-full bg-white text-slate-800 focus:outline-none">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3 text-slate-400"></i>
+        <button onclick="clearSearch()" class="absolute right-2.5 text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- MAIN SCROLLABLE LIBRARY -->
+    <main class="flex-1 overflow-y-auto px-3 py-3 space-y-3 relative pb-20" id="main-feed">
+      
+      <!-- Toolbar Stats & Sort -->
+      <div class="flex items-center justify-between text-xs text-slate-500 bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+        <span>Stored: <strong id="work-count-text" class="text-ao3-red">0</strong> works</span>
+        <div class="flex items-center gap-1.5">
+          <label for="sort-selector" class="text-[11px] text-slate-400">Sort:</label>
+          <select id="sort-selector" onchange="applyFilters()" class="bg-slate-100 text-xs border border-slate-300 rounded-lg px-2 py-1 text-slate-700 focus:outline-none">
+            <option value="dateAdded-desc">Recently Added</option>
+            <option value="wordCount-desc">Words (High-Low)</option>
+            <option value="wordCount-asc">Words (Low-High)</option>
+            <option value="title-asc">Title (A-Z)</option>
+            <option value="author-asc">Author (A-Z)</option>
+          </select>
         </div>
-        <div id="fic-container" class="fic-list">
-            <div class="empty-state">No fics imported yet.<br>Tap "+ Import" to add EPUB or PDF files.</div>
-        </div>
+      </div>
+
+      <!-- Drag & Drop / Upload Dropzone Container -->
+      <div id="dropzone" class="border-2 border-dashed border-red-300 bg-red-50/50 rounded-xl p-4 text-center cursor-pointer transition hover:bg-red-50" onclick="triggerFileInput()">
+        <i data-lucide="folder-plus" class="w-7 h-7 text-ao3-red mx-auto mb-1"></i>
+        <p class="text-xs font-semibold text-ao3-red">Tap or Drag & Drop AO3 .EPUB files</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Files persist in device IndexedDB automatically</p>
+      </div>
+
+      <!-- Story Cards Container -->
+      <div id="fic-card-container" class="space-y-3">
+        <!-- Rendered dynamically -->
+      </div>
     </main>
 
-    <!-- Selection Bar -->
-    <div id="selection-bar">
-        <span id="selected-count">0 selected</span>
-        <div style="display: flex; gap: 0.5rem;">
-            <button class="btn-secondary" onclick="selectAllFics()">Select All</button>
-            <button style="background: #d9534f;" onclick="deleteSelectedFics()">Delete</button>
-            <button class="btn-secondary" onclick="exitSelectionMode()">Cancel</button>
+    <!-- FAB IMPORT BUTTON -->
+    <label for="epub-input" class="absolute bottom-16 right-4 bg-ao3-red hover:bg-ao3-redHover text-white p-3.5 rounded-full shadow-xl cursor-pointer transition transform active:scale-95 z-30 flex items-center justify-center border border-red-700">
+      <i data-lucide="plus" class="w-6 h-6"></i>
+    </label>
+    <input type="file" id="epub-input" accept=".epub" multiple class="hidden" onchange="handleEPUBUpload(event)">
+
+    <!-- BOTTOM ANDROID NAV BAR -->
+    <nav class="bg-white border-t border-slate-200 h-14 shrink-0 flex items-center justify-around z-20 text-[11px] font-medium text-slate-500">
+      <button onclick="switchTab('library')" id="nav-tab-library" class="flex flex-col items-center justify-center w-full h-full text-ao3-red">
+        <i data-lucide="library" class="w-5 h-5 mb-0.5"></i>
+        <span>Library</span>
+      </button>
+      <button onclick="openFilterModal()" class="flex flex-col items-center justify-center w-full h-full hover:text-ao3-red">
+        <i data-lucide="filter" class="w-5 h-5 mb-0.5"></i>
+        <span>Filter</span>
+      </button>
+      <button onclick="openStorageModal()" class="flex flex-col items-center justify-center w-full h-full hover:text-ao3-red">
+        <i data-lucide="hard-drive" class="w-5 h-5 mb-0.5"></i>
+        <span>Storage</span>
+      </button>
+    </nav>
+
+    <!-- READER FULLSCREEN VIEW -->
+    <div id="reader-view" class="absolute inset-0 bg-white z-50 overflow-y-auto hidden flex flex-col theme-default transition-colors duration-150">
+      
+      <!-- Reader App Bar -->
+      <header class="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-between gap-2 shadow-sm">
+        <div class="flex items-center gap-2 min-w-0">
+          <button onclick="closeReaderView()" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+          </button>
+          <span id="reader-top-title" class="font-serif font-bold text-xs truncate max-w-[130px]"></span>
         </div>
+
+        <!-- Chapter Nav -->
+        <div class="flex items-center gap-1">
+          <button onclick="navigateChapter(-1)" id="btn-prev-chap" class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+
+          <select id="reader-chapter-dropdown" onchange="onChapterSelect(this.value)" class="text-xs border border-slate-300 dark:border-slate-700 rounded px-1 py-1 max-w-[110px] bg-transparent focus:outline-none">
+          </select>
+
+          <button onclick="navigateChapter(1)" id="btn-next-chap" class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <button onclick="toggleReaderSettings()" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition">
+          <i data-lucide="settings-2" class="w-5 h-5"></i>
+        </button>
+      </header>
+
+      <!-- Reader Settings Sheet -->
+      <div id="reader-settings-panel" class="hidden sticky top-10 z-40 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-3 shadow-md space-y-3 text-xs">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 mb-1">THEME</label>
+          <div class="grid grid-cols-4 gap-1.5">
+            <button onclick="setReaderTheme('default')" class="py-1 rounded border bg-white text-slate-900 font-medium">Light</button>
+            <button onclick="setReaderTheme('dark')" class="py-1 rounded border bg-slate-900 text-slate-100 font-medium border-slate-700">Dark</button>
+            <button onclick="setReaderTheme('sepia')" class="py-1 rounded border bg-[#fbf0d9] text-[#362b1b] font-medium border-amber-300">Sepia</button>
+            <button onclick="setReaderTheme('oled')" class="py-1 rounded border bg-black text-slate-400 font-medium border-zinc-800">OLED</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 mb-1">FONT</label>
+            <select id="reader-font-family" onchange="setReaderFont(this.value)" class="w-full p-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900">
+              <option value="font-serif">Georgia</option>
+              <option value="font-sans">Inter</option>
+              <option value="font-mono">Monospace</option>
+              <option value="font-dyslexic">Dyslexic</option>
+            </select>
+          </div>
+          <div>
+            <div class="flex justify-between">
+              <label class="text-[10px] font-bold text-slate-400 mb-1">SIZE</label>
+              <span id="font-size-label" class="text-slate-400">16px</span>
+            </div>
+            <input type="range" min="12" max="28" value="16" oninput="setReaderFontSize(this.value)" class="w-full accent-ao3-red">
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN READING AREA -->
+      <div class="flex-1 px-4 py-5 max-w-2xl mx-auto w-full">
+        <!-- Story Metadata Header -->
+        <div id="reader-meta-header" class="mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 space-y-2">
+          <h1 id="reader-title" class="text-xl font-serif font-bold text-center text-ao3-red leading-tight"></h1>
+          <p id="reader-author" class="text-center text-xs opacity-75 font-medium"></p>
+          <div id="reader-tags-box" class="bg-black/5 dark:bg-white/5 p-3 rounded-lg text-[11px] space-y-1 mt-3"></div>
+          <div id="reader-summary-box" class="italic text-xs opacity-90 border-l-2 border-ao3-red pl-2.5 my-2"></div>
+        </div>
+
+        <!-- Rendered Chapter Body HTML -->
+        <article id="reader-content-body" class="reader-body selectable-text font-serif text-base leading-relaxed">
+        </article>
+
+        <!-- Chapter Bottom Bar -->
+        <div class="flex justify-between items-center my-8 pt-3 border-t border-slate-200 dark:border-slate-800">
+          <button onclick="navigateChapter(-1)" id="btn-bottom-prev" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">
+            &larr; Previous Chapter
+          </button>
+          <button onclick="document.getElementById('reader-view').scrollTo({top: 0, behavior: 'smooth'})" class="text-[11px] opacity-70 underline">
+            Top
+          </button>
+          <button onclick="navigateChapter(1)" id="btn-bottom-next" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">
+            Next Chapter &rarr;
+          </button>
+        </div>
+      </div>
+
     </div>
 
-    <!-- Reader Modal -->
-    <div id="reader-view">
-        <div class="reader-header">
-            <button class="btn-secondary" onclick="closeReader()">✕ Close</button>
-            <span id="reader-title" style="font-weight: 600; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%;"></span>
-            <button class="btn-secondary" onclick="toggleReaderTheme()">🎨</button>
+    <!-- FILTER MODAL -->
+    <div id="filter-modal" class="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center hidden">
+      <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+        <div class="flex justify-between items-center border-b pb-2">
+          <h3 class="font-serif font-bold text-base text-ao3-red flex items-center gap-1.5">
+            <i data-lucide="filter" class="w-4 h-4"></i> Filter Works
+          </h3>
+          <button onclick="closeFilterModal()" class="text-slate-400 hover:text-slate-600">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
         </div>
-        <div class="reader-content" id="reader-content"></div>
-        <div class="reader-footer">
-            <button class="btn-secondary" onclick="changeChapter(-1)">← Prev</button>
-            <span id="chapter-indicator">Chapter 1 of 1</span>
-            <button class="btn-secondary" onclick="changeChapter(1)">Next →</button>
+
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-2">Rating</label>
+          <div class="space-y-1.5 text-xs">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" value="General Audiences" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()">
+              <span class="rating-badge rating-G">G</span> General Audiences
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" value="Teen And Up Audiences" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()">
+              <span class="rating-badge rating-T">T</span> Teen And Up Audiences
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" value="Mature" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()">
+              <span class="rating-badge rating-M">M</span> Mature
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" value="Explicit" class="filter-rating-cb text-ao3-red rounded" onchange="applyFilters()">
+              <span class="rating-badge rating-E">E</span> Explicit
+            </label>
+          </div>
         </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1.5">Completion</label>
+          <div class="grid grid-cols-3 gap-1.5 text-xs">
+            <label class="border p-2 rounded text-center cursor-pointer flex items-center justify-center gap-1">
+              <input type="radio" name="completion-filter" value="all" checked onchange="applyFilters()"> All
+            </label>
+            <label class="border p-2 rounded text-center cursor-pointer flex items-center justify-center gap-1">
+              <input type="radio" name="completion-filter" value="complete" onchange="applyFilters()"> Complete
+            </label>
+            <label class="border p-2 rounded text-center cursor-pointer flex items-center justify-center gap-1">
+              <input type="radio" name="completion-filter" value="wip" onchange="applyFilters()"> In Progress
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-500 mb-1.5">Word Count</label>
+          <div class="flex items-center gap-2">
+            <input type="number" id="min-words-input" placeholder="Min" onchange="applyFilters()" class="w-1/2 p-2 text-xs border rounded-md">
+            <span class="text-slate-400">-</span>
+            <input type="number" id="max-words-input" placeholder="Max" onchange="applyFilters()" class="w-1/2 p-2 text-xs border rounded-md">
+          </div>
+        </div>
+
+        <div class="flex justify-between items-center pt-2 border-t">
+          <button onclick="resetFilters()" class="text-xs text-slate-500 underline font-medium">Reset</button>
+          <button onclick="closeFilterModal()" class="px-4 py-2 bg-ao3-red text-white text-xs font-bold rounded-lg">Done</button>
+        </div>
+      </div>
     </div>
 
-    <script>
-        let db;
-        let ficsCache = [];
-        let currentFic = null;
-        let currentChapterIdx = 0;
-        let isSelecting = false;
-        let selectedIds = new Set();
-        let longPressTimer = null;
+    <!-- STORAGE / SETTINGS MODAL -->
+    <div id="storage-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+      <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-xl">
+        <div class="flex justify-between items-center border-b pb-2">
+          <h3 class="font-serif font-bold text-base text-ao3-red flex items-center gap-1.5">
+            <i data-lucide="hard-drive" class="w-4 h-4"></i> Storage & Persistence
+          </h3>
+          <button onclick="closeStorageModal()" class="text-slate-400 hover:text-slate-600">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
 
-        // Init IndexedDB
-        const request = indexedDB.open('AO3ReaderDB', 1);
+        <div class="space-y-2 text-xs text-slate-600">
+          <p>This app uses <strong>IndexedDB</strong> to store full EPUB contents directly inside your device's browser database.</p>
+          <div class="bg-slate-100 p-2.5 rounded-lg space-y-1">
+            <div class="flex justify-between"><span>Stored Works:</span> <strong id="stat-works-count">0</strong></div>
+            <div class="flex justify-between"><span>IndexedDB Status:</span> <strong class="text-green-600">Active</strong></div>
+          </div>
+          <button onclick="clearIndexedDB()" class="w-full py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 mt-2">
+            Delete All Library Data
+          </button>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button onclick="closeStorageModal()" class="px-4 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-md">Close</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // --- INDEXEDDB IMPLEMENTATION ---
+    const DB_NAME = 'AO3OfflineReaderDB';
+    const DB_VERSION = 1;
+    const STORE_WORKS = 'works';
+    let db = null;
+    let loadedWorks = [];
+    let activeWork = null;
+    let activeChapIndex = 0;
+    let deferredPWAInstallPrompt = null;
+
+    // Selection Mode State
+    let selectionMode = false;
+    let selectedWorkIds = new Set();
+    let longPressTimer = null;
+
+    // Initialize Database
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
         request.onupgradeneeded = (e) => {
-            db = e.target.result;
-            if (!db.objectStoreNames.contains('fics')) {
-                db.createObjectStore('fics', { keyPath: 'id' });
-            }
+          const dbInstance = e.target.result;
+          if (!dbInstance.objectStoreNames.contains(STORE_WORKS)) {
+            dbInstance.createObjectStore(STORE_WORKS, { keyPath: 'id' });
+          }
         };
         request.onsuccess = (e) => {
-            db = e.target.result;
-            loadFics();
+          db = e.target.result;
+          resolve(db);
+        };
+        request.onerror = (e) => reject(e);
+      });
+    }
+
+    function saveWorkToDB(work) {
+      return new Promise((resolve, reject) => {
+        if (!db) return reject("No DB");
+        const tx = db.transaction(STORE_WORKS, 'readwrite');
+        const store = tx.objectStore(STORE_WORKS);
+        store.put(work);
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e);
+      });
+    }
+
+    function fetchWorksFromDB() {
+      return new Promise((resolve, reject) => {
+        if (!db) return reject("No DB");
+        const tx = db.transaction(STORE_WORKS, 'readonly');
+        const store = tx.objectStore(STORE_WORKS);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = (e) => reject(e);
+      });
+    }
+
+    function deleteWorkFromDB(id) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_WORKS, 'readwrite');
+        const store = tx.objectStore(STORE_WORKS);
+        store.delete(id);
+        tx.oncomplete = () => resolve();
+      });
+    }
+
+    function clearDB() {
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORE_WORKS, 'readwrite');
+        const store = tx.objectStore(STORE_WORKS);
+        store.clear();
+        tx.oncomplete = () => resolve();
+      });
+    }
+
+    // --- APP INITIALIZATION ---
+    window.onload = async function() {
+      lucide.createIcons();
+      setupDragAndDrop();
+      registerInlineServiceWorker();
+
+      try {
+        await initDB();
+        await refreshLibrary();
+      } catch(e) {
+        console.error("IndexedDB initialization error", e);
+      }
+    };
+
+    // --- SERVICE WORKER & PWA REGISTRATION ---
+    function registerInlineServiceWorker() {
+      if ('serviceWorker' in navigator) {
+        const swCode = `
+          self.addEventListener('install', (e) => e.waitUntil(self.skipWaiting()));
+          self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+          self.addEventListener('fetch', (e) => {
+            e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+          });
+        `;
+        const blob = new Blob([swCode], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(blob);
+        navigator.serviceWorker.register(swUrl).catch(() => {});
+      }
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPWAInstallPrompt = e;
+        document.getElementById('pwa-install-btn').classList.remove('hidden');
+      });
+    }
+
+    function promptPWAInstall() {
+      if (deferredPWAInstallPrompt) {
+        deferredPWAInstallPrompt.prompt();
+        deferredPWAInstallPrompt.userChoice.then(() => {
+          deferredPWAInstallPrompt = null;
+          document.getElementById('pwa-install-btn').classList.add('hidden');
+        });
+      }
+    }
+
+    // --- EPUB PARSER ENGINE ---
+    function triggerFileInput() {
+      document.getElementById('epub-input').click();
+    }
+
+    function setupDragAndDrop() {
+      const dropzone = document.getElementById('dropzone');
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+      });
+      dropzone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files && files.length) processFiles(files);
+      });
+    }
+
+    function handleEPUBUpload(event) {
+      const files = event.target.files;
+      if (files && files.length) processFiles(files);
+    }
+
+    async function processFiles(files) {
+      for (let file of files) {
+        if (file.name.endsWith('.epub')) {
+          await parseAndStoreEPUB(file);
+        }
+      }
+      await refreshLibrary();
+    }
+
+    async function parseAndStoreEPUB(file) {
+      try {
+        const zip = await JSZip.loadAsync(file);
+        let title = file.name.replace('.epub', '');
+        let author = "Unknown Author";
+        let summary = "";
+        let rating = "Not Rated";
+        let fandoms = [];
+        let relationships = [];
+        let characters = [];
+        let tags = [];
+        let chapters = [];
+        let totalWords = 0;
+
+        const htmlFiles = [];
+        zip.forEach((path, entry) => {
+          if (!entry.isDirectory && (path.endsWith('.html') || path.endsWith('.xhtml'))) {
+            htmlFiles.push(path);
+          }
+        });
+        htmlFiles.sort();
+
+        for (let i = 0; i < htmlFiles.length; i++) {
+          const contentText = await zip.file(htmlFiles[i]).async('text');
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(contentText, 'text/html');
+
+          // Extract metadata from first chapter or metadata tags
+          if (i === 0 || contentText.includes('Fandom:')) {
+            const getMeta = (lbl) => {
+              const nodes = Array.from(doc.querySelectorAll('dt, b, strong'));
+              for (let node of nodes) {
+                if (node.textContent.toLowerCase().includes(lbl.toLowerCase())) {
+                  const target = node.nextElementSibling || node.parentElement.nextElementSibling;
+                  if (target) return target.textContent.trim();
+                }
+              }
+              return null;
+            };
+
+            rating = getMeta('Rating:') || rating;
+            const f = getMeta('Fandom:'); if (f) fandoms = f.split(',').map(s => s.trim());
+            const r = getMeta('Relationship:') || getMeta('Relationships:'); if (r) relationships = r.split(',').map(s => s.trim());
+            const c = getMeta('Char:') || getMeta('Characters:'); if (c) characters = c.split(',').map(s => s.trim());
+            const t = getMeta('Tags:'); if (t) tags = t.split(',').map(s => s.trim());
+
+            const sumNode = doc.querySelector('blockquote') || doc.querySelector('.summary');
+            if (sumNode) summary = sumNode.innerHTML;
+          }
+
+          if (doc.body) {
+            const rawText = doc.body.textContent || '';
+            const words = rawText.trim().split(/\s+/).filter(Boolean).length;
+            totalWords += words;
+
+            let cTitle = `Chapter ${chapters.length + 1}`;
+            const header = doc.querySelector('h1, h2, h3');
+            if (header && header.textContent.trim()) cTitle = header.textContent.trim();
+
+            chapters.push({ title: cTitle, content: doc.body.innerHTML });
+          }
+        }
+
+        const workRecord = {
+          id: 'work-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+          title: title,
+          author: author,
+          rating: rating,
+          fandoms: fandoms.length ? fandoms : ['General Fandom'],
+          relationships: relationships,
+          characters: characters,
+          tags: tags,
+          summary: summary || '<p>No summary provided.</p>',
+          words: totalWords,
+          chaptersCount: chapters.length || 1,
+          isComplete: true,
+          dateAdded: new Date().toISOString(),
+          lastReadChapter: 0,
+          chapters: chapters.length ? chapters : [{ title: 'Work', content: '<p>Empty work.</p>' }]
         };
 
-        function saveFicToDB(ficData) {
-            const tx = db.transaction('fics', 'readwrite');
-            tx.objectStore('fics').put(ficData);
-            tx.oncomplete = () => loadFics();
+        await saveWorkToDB(workRecord);
+      } catch (e) {
+        console.error("EPUB parse error", e);
+      }
+    }
+
+    // --- LIBRARY RENDER ENGINE ---
+    async function refreshLibrary() {
+      loadedWorks = await fetchWorksFromDB();
+      renderLibraryUI();
+    }
+
+    function renderLibraryUI() {
+      const container = document.getElementById('fic-card-container');
+      const filtered = getFilteredWorks();
+
+      document.getElementById('work-count-text').textContent = loadedWorks.length;
+      document.getElementById('stat-works-count').textContent = loadedWorks.length;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white rounded-xl p-6 text-center border border-slate-200">
+            <i data-lucide="book-open" class="w-8 h-8 text-slate-300 mx-auto mb-2"></i>
+            <p class="text-xs text-slate-500 font-semibold">No works match your current filters or library is empty.</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = filtered.map(work => createFicCardHTML(work)).join('');
+      lucide.createIcons();
+    }
+
+    function getFilteredWorks() {
+      const query = document.getElementById('search-input').value.toLowerCase().trim();
+      const sortVal = document.getElementById('sort-selector').value;
+      const minW = parseInt(document.getElementById('min-words-input').value) || 0;
+      const maxW = parseInt(document.getElementById('max-words-input').value) || Infinity;
+      const checkedRatings = Array.from(document.querySelectorAll('.filter-rating-cb:checked')).map(cb => cb.value);
+      const completion = document.querySelector('input[name="completion-filter"]:checked').value;
+
+      return loadedWorks.filter(w => {
+        if (query) {
+          const inTitle = w.title.toLowerCase().includes(query);
+          const inAuthor = w.author.toLowerCase().includes(query);
+          const inFandom = w.fandoms.some(f => f.toLowerCase().includes(query));
+          const inRel = w.relationships.some(r => r.toLowerCase().includes(query));
+          const inTag = w.tags.some(t => t.toLowerCase().includes(query));
+          if (!inTitle && !inAuthor && !inFandom && !inRel && !inTag) return false;
         }
 
-        function loadFics() {
-            const tx = db.transaction('fics', 'readonly');
-            const store = tx.objectStore('fics');
-            const req = store.getAll();
-            req.onsuccess = () => {
-                ficsCache = req.result;
-                renderFics(ficsCache);
-            };
-        }
+        if (checkedRatings.length > 0 && !checkedRatings.includes(w.rating)) return false;
+        if (completion === 'complete' && !w.isComplete) return false;
+        if (completion === 'wip' && w.isComplete) return false;
+        if (w.words < minW || w.words > maxW) return false;
 
-        // File handling
-        document.getElementById('file-input').addEventListener('change', async (e) => {
-            const files = e.target.files;
-            for (let file of files) {
-                if (file.name.endsWith('.epub')) {
-                    await parseEpub(file);
-                } else if (file.name.endsWith('.pdf')) {
-                    await parsePdf(file);
-                }
-            }
-            e.target.value = '';
-        });
+        return true;
+      }).sort((a, b) => {
+        if (sortVal === 'dateAdded-desc') return new Date(b.dateAdded) - new Date(a.dateAdded);
+        if (sortVal === 'wordCount-desc') return b.words - a.words;
+        if (sortVal === 'wordCount-asc') return a.words - b.words;
+        if (sortVal === 'title-asc') return a.title.localeCompare(b.title);
+        if (sortVal === 'author-asc') return a.author.localeCompare(b.author);
+        return 0;
+      });
+    }
 
-        async function parseEpub(file) {
-            const zip = await JSZip.loadAsync(file);
-            const fic = {
-                id: 'fic_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9),
-                title: file.name.replace('.epub', ''),
-                author: 'Unknown Author',
-                summary: 'Imported EPUB file.',
-                chapters: [{ title: 'Content', content: '<p>Loading EPUB contents...</p>' }]
-            };
-            
-            try {
-                const containerFile = zip.file('META-INF/container.xml');
-                if (containerFile) {
-                    const containerXml = await containerFile.async('text');
-                    const parser = new DOMParser();
-                    const xmlDoc = parser.parseFromString(containerXml, 'text/xml');
-                    const opfPath = xmlDoc.querySelector('rootfile').getAttribute('full-path');
-                    
-                    const opfFile = zip.file(opfPath);
-                    if (opfFile) {
-                        const opfText = await opfFile.async('text');
-                        const opfDoc = parser.parseFromString(opfText, 'text/xml');
-                        
-                        const titleEl = opfDoc.querySelector('dc\\:title, title');
-                        if (titleEl) fic.title = titleEl.textContent;
-                        
-                        const authorEl = opfDoc.querySelector('dc\\:creator, creator');
-                        if (authorEl) fic.author = authorEl.textContent;
+    function createFicCardHTML(work) {
+      let rClass = 'rating-NR', rLabel = 'NR';
+      if (work.rating.includes('General')) { rClass = 'rating-G'; rLabel = 'G'; }
+      else if (work.rating.includes('Teen')) { rClass = 'rating-T'; rLabel = 'T'; }
+      else if (work.rating.includes('Mature')) { rClass = 'rating-M'; rLabel = 'M'; }
+      else if (work.rating.includes('Explicit')) { rClass = 'rating-E'; rLabel = 'E'; }
 
-                        let chapters = [];
-                        const items = opfDoc.querySelectorAll('item');
-                        for (let item of items) {
-                            if (item.getAttribute('media-type') === 'application/xhtml+xml' || item.getAttribute('media-type') === 'text/html') {
-                                let href = item.getAttribute('href');
-                                let basePath = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
-                                let fullPath = basePath + href;
-                                let htmlFile = zip.file(fullPath) || zip.file(href);
-                                if (htmlFile) {
-                                    let htmlText = await htmlFile.async('text');
-                                    chapters.push({ title: item.getAttribute('id') || 'Chapter', content: htmlText });
-                                }
-                            }
-                        }
-                        if (chapters.length > 0) fic.chapters = chapters;
-                    }
-                }
-            } catch (err) {
-                console.error("EPUB Parse warning:", err);
-            }
-            saveFicToDB(fic);
-        }
+      const isSelected = selectedWorkIds.has(work.id);
 
-        async function parsePdf(file) {
-            const arrayBuffer = await file.arrayBuffer();
-            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-            const pdfDoc = await loadingTask.promise;
-            
-            let chapters = [];
-            for (let i = 1; i <= pdfDoc.numPages; i++) {
-                const page = await pdfDoc.getPage(i);
-                const textContent = await page.getTextContent();
-                const text = textContent.items.map(item => item.str).join(' ');
-                chapters.push({ title: `Page ${i}`, content: `<p>${text}</p>` });
-            }
-
-            const fic = {
-                id: 'fic_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9),
-                title: file.name.replace('.pdf', ''),
-                author: 'PDF Document',
-                summary: `Imported PDF file with ${pdfDoc.numPages} pages.`,
-                chapters: chapters
-            };
-            saveFicToDB(fic);
-        }
-
-        function renderFics(fics) {
-            const container = document.getElementById('fic-container');
-            if (fics.length === 0) {
-                container.innerHTML = `<div class="empty-state">No fics imported yet.<br>Tap "+ Import" to add EPUB or PDF files.</div>`;
-                return;
-            }
-            
-            container.innerHTML = fics.map(fic => `
-                <div class="fic-card ${selectedIds.has(fic.id) ? 'selecting' : ''}" 
-                     data-id="${fic.id}"
-                     onmousedown="startLongPress('${fic.id}')"
-                     ontouchstart="startLongPress('${fic.id}')"
-                     onmouseup="cancelLongPress()"
-                     ontouchend="cancelLongPress()"
-                     onclick="handleCardClick(event, '${fic.id}')">
-                    <input type="checkbox" class="select-checkbox" ${selectedIds.has(fic.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSelect('${fic.id}')">
-                    <div class="fic-title">${escapeHtml(fic.title)}</div>
-                    <div class="fic-author">By ${escapeHtml(fic.author)}</div>
-                    <div class="fic-summary">${escapeHtml(fic.summary)}</div>
+      return `
+        <article id="card-${work.id}" 
+          onmousedown="startLongPress('${work.id}')" 
+          onmouseup="cancelLongPress()" 
+          mouseleave="cancelLongPress()"
+          ontouchstart="startLongPress('${work.id}')" 
+          ontouchend="cancelLongPress()"
+          onclick="handleCardClick(event, '${work.id}')"
+          class="bg-white rounded-xl border ${isSelected ? 'border-ao3-red bg-red-50/30' : 'border-slate-200'} shadow-sm p-3.5 space-y-2 relative transition duration-150 cursor-pointer">
+          
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-start gap-2">
+              ${selectionMode ? `
+                <div class="mt-0.5 w-5 h-5 rounded border flex items-center justify-center ${isSelected ? 'bg-ao3-red border-ao3-red text-white' : 'border-slate-300 bg-white'}">
+                  ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 stroke-[3]"></i>' : ''}
                 </div>
-            `).join('');
+              ` : `<span class="rating-badge ${rClass} mt-0.5">${rLabel}</span>`}
+              <div>
+                <h3 class="font-serif font-bold text-sm text-ao3-red leading-snug">
+                  ${escapeHTML(work.title)}
+                </h3>
+                <p class="text-[11px] text-slate-500">by ${escapeHTML(work.author)}</p>
+              </div>
+            </div>
+            
+            ${!selectionMode ? `
+              <div class="flex gap-1">
+                <button onclick="event.stopPropagation(); openReader('${work.id}')" class="px-2.5 py-1 bg-ao3-red text-white text-xs font-semibold rounded-lg shadow-sm">
+                  Read
+                </button>
+              </div>
+            ` : ''}
+          </div>
 
-            if (isSelecting) {
-                document.querySelectorAll('.fic-card').forEach(c => c.classList.add('selecting'));
-                document.getElementById('selection-bar').style.display = 'flex';
-                document.getElementById('selected-count').innerText = `${selectedIds.size} selected`;
-            } else {
-                document.getElementById('selection-bar').style.display = 'none';
-            }
-        }
+          <div class="text-[11px] text-slate-700">
+            <span class="text-slate-400">Fandom:</span> <strong>${work.fandoms.join(', ')}</strong>
+          </div>
 
-        function startLongPress(id) {
-            if (isSelecting) return;
-            longPressTimer = setTimeout(() => {
-                isSelecting = true;
-                selectedIds.add(id);
-                renderFics(ficsCache);
-            }, 500);
-        }
+          <div class="flex flex-wrap gap-1 text-[10px]">
+            ${work.relationships.map(r => `<span class="bg-red-50 text-ao3-tagRel border border-red-200 px-1.5 py-0.5 rounded font-medium">${escapeHTML(r)}</span>`).join('')}
+            ${work.tags.map(t => `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">${escapeHTML(t)}</span>`).join('')}
+          </div>
 
-        function cancelLongPress() {
-            if (longPressTimer) clearTimeout(longPressTimer);
-        }
+          <div class="bg-slate-50 border-l-2 border-ao3-red p-2 rounded-r text-[11px] text-slate-600 italic line-clamp-3">
+            ${work.summary}
+          </div>
 
-        function handleCardClick(event, id) {
-            if (isSelecting) {
-                toggleSelect(id);
-            } else {
-                openReader(id);
-            }
-        }
+          <div class="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t">
+            <span>${work.words.toLocaleString()} words • ${work.chaptersCount} chap</span>
+            <span>Progress: Chap ${work.lastReadChapter + 1}</span>
+          </div>
+        </article>
+      `;
+    }
 
-        function toggleSelect(id) {
-            if (selectedIds.has(id)) {
-                selectedIds.delete(id);
-                if (selectedIds.size === 0) exitSelectionMode();
-            } else {
-                selectedIds.add(id);
-            }
-            renderFics(ficsCache);
-        }
+    // --- LONG PRESS & MULTI-SELECTION LOGIC ---
+    function startLongPress(id) {
+      cancelLongPress();
+      longPressTimer = setTimeout(() => {
+        enterSelectionMode(id);
+      }, 500);
+    }
 
-        function selectAllFics() {
-            ficsCache.forEach(f => selectedIds.add(f.id));
-            renderFics(ficsCache);
-        }
+    function cancelLongPress() {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    }
 
-        function exitSelectionMode() {
-            isSelecting = false;
-            selectedIds.clear();
-            renderFics(ficsCache);
-        }
+    function enterSelectionMode(initialId) {
+      selectionMode = true;
+      selectedWorkIds.clear();
+      if (initialId) selectedWorkIds.add(initialId);
 
-        function deleteSelectedFics() {
-            if (selectedIds.size === 0) return;
-            if (confirm(`Permanently delete ${selectedIds.size} selected work(s)?`)) {
-                const tx = db.transaction('fics', 'readwrite');
-                const store = tx.objectStore('fics');
-                selectedIds.forEach(id => store.delete(id));
-                tx.oncomplete = () => {
-                    exitSelectionMode();
-                    loadFics();
-                };
-            }
-        }
+      document.getElementById('standard-app-bar').classList.add('hidden');
+      document.getElementById('selection-app-bar').classList.remove('hidden');
 
-        function openReader(id) {
-            currentFic = ficsCache.find(f => f.id === id);
-            if (!currentFic) return;
-            currentChapterIdx = 0;
-            document.getElementById('reader-title').innerText = currentFic.title;
-            renderChapter();
-            document.getElementById('reader-view').style.display = 'flex';
-        }
+      updateSelectionUI();
+    }
 
-        function closeReader() {
-            document.getElementById('reader-view').style.display = 'none';
-        }
+    function exitSelectionMode() {
+      selectionMode = false;
+      selectedWorkIds.clear();
 
-        function renderChapter() {
-            const chap = currentFic.chapters[currentChapterIdx] || { title: '', content: 'Empty chapter' };
-            document.getElementById('reader-content').innerHTML = `<h2>${chap.title}</h2><br>` + chap.content;
-            document.getElementById('chapter-indicator').innerText = `Chapter ${currentChapterIdx + 1} of ${currentFic.chapters.length}`;
-            document.getElementById('reader-content').scrollTop = 0;
-        }
+      document.getElementById('selection-app-bar').classList.add('hidden');
+      document.getElementById('standard-app-bar').classList.remove('hidden');
 
-        function changeChapter(dir) {
-            const newIdx = currentChapterIdx + dir;
-            if (newIdx >= 0 && newIdx < currentFic.chapters.length) {
-                currentChapterIdx = newIdx;
-                renderChapter();
-            }
-        }
+      renderLibraryUI();
+    }
 
-        function filterFics() {
-            const q = document.getElementById('search-box').value.toLowerCase();
-            const filtered = ficsCache.filter(f => f.title.toLowerCase().includes(q) || f.author.toLowerCase().includes(q));
-            renderFics(filtered);
-        }
+    function handleCardClick(event, id) {
+      if (selectionMode) {
+        event.stopPropagation();
+        toggleSelectWork(id);
+      } else {
+        openReader(id);
+      }
+    }
 
-        function toggleTheme() {
-            const themes = ['light', 'dark', 'sepia'];
-            const current = document.body.getAttribute('data-theme') || 'light';
-            const next = themes[(themes.indexOf(current) + 1) % themes.length];
-            document.body.setAttribute('data-theme', next);
-        }
+    function toggleSelectWork(id) {
+      if (selectedWorkIds.has(id)) {
+        selectedWorkIds.delete(id);
+      } else {
+        selectedWorkIds.add(id);
+      }
 
-        function toggleReaderTheme() {
-            toggleTheme();
-        }
+      if (selectedWorkIds.size === 0) {
+        exitSelectionMode();
+      } else {
+        updateSelectionUI();
+      }
+    }
 
-        function escapeHtml(str) {
-            return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    function toggleSelectAll() {
+      const currentFiltered = getFilteredWorks();
+      if (selectedWorkIds.size === currentFiltered.length) {
+        selectedWorkIds.clear();
+      } else {
+        currentFiltered.forEach(w => selectedWorkIds.add(w.id));
+      }
+      updateSelectionUI();
+    }
+
+    function updateSelectionUI() {
+      document.getElementById('selected-count-text').textContent = `${selectedWorkIds.size} selected`;
+      const currentFiltered = getFilteredWorks();
+      const allSelected = currentFiltered.length > 0 && selectedWorkIds.size === currentFiltered.length;
+      document.getElementById('select-all-btn').textContent = allSelected ? 'Deselect All' : 'Select All';
+
+      renderLibraryUI();
+    }
+
+    async function deleteSelectedWorks() {
+      if (selectedWorkIds.size === 0) return;
+
+      const count = selectedWorkIds.size;
+      if (confirm(`Permanently delete ${count} selected story file(s) from device storage?`)) {
+        for (let id of selectedWorkIds) {
+          await deleteWorkFromDB(id);
         }
-    </script>
+        exitSelectionMode();
+        await refreshLibrary();
+      }
+    }
+
+    async function deleteWork(id) {
+      if (confirm("Delete this story from device storage?")) {
+        await deleteWorkFromDB(id);
+        await refreshLibrary();
+      }
+    }
+
+    async function clearIndexedDB() {
+      if (confirm("Permanently remove all local EPUB files?")) {
+        await clearDB();
+        await refreshLibrary();
+        closeStorageModal();
+      }
+    }
+
+    // --- READER LOGIC & PROGRESS PERSISTENCE ---
+    function openReader(workId) {
+      activeWork = loadedWorks.find(w => w.id === workId);
+      if (!activeWork) return;
+
+      activeChapIndex = activeWork.lastReadChapter || 0;
+
+      document.getElementById('reader-top-title').textContent = activeWork.title;
+      document.getElementById('reader-title').textContent = activeWork.title;
+      document.getElementById('reader-author').textContent = `by ${activeWork.author}`;
+
+      document.getElementById('reader-tags-box').innerHTML = `
+        <p><strong>Rating:</strong> ${activeWork.rating}</p>
+        <p><strong>Fandoms:</strong> ${activeWork.fandoms.join(', ')}</p>
+        <p><strong>Relationships:</strong> ${activeWork.relationships.join(', ') || 'None'}</p>
+      `;
+      document.getElementById('reader-summary-box').innerHTML = `<strong>Summary:</strong> ${activeWork.summary}`;
+
+      const drop = document.getElementById('reader-chapter-dropdown');
+      drop.innerHTML = activeWork.chapters.map((c, i) => `<option value="${i}">${c.title || `Chapter ${i+1}`}</option>`).join('');
+
+      renderChapterBody();
+      document.getElementById('reader-view').classList.remove('hidden');
+    }
+
+    function closeReaderView() {
+      document.getElementById('reader-view').classList.add('hidden');
+      activeWork = null;
+    }
+
+    async function renderChapterBody() {
+      if (!activeWork || !activeWork.chapters[activeChapIndex]) return;
+
+      const chap = activeWork.chapters[activeChapIndex];
+      document.getElementById('reader-chapter-dropdown').value = activeChapIndex;
+
+      document.getElementById('btn-prev-chap').disabled = (activeChapIndex === 0);
+      document.getElementById('btn-next-chap').disabled = (activeChapIndex === activeWork.chapters.length - 1);
+      document.getElementById('btn-bottom-prev').disabled = (activeChapIndex === 0);
+      document.getElementById('btn-bottom-next').disabled = (activeChapIndex === activeWork.chapters.length - 1);
+
+      document.getElementById('reader-content-body').innerHTML = chap.content;
+      document.getElementById('reader-view').scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Save bookmark reading progress to IndexedDB
+      activeWork.lastReadChapter = activeChapIndex;
+      await saveWorkToDB(activeWork);
+    }
+
+    function navigateChapter(dir) {
+      const target = activeChapIndex + dir;
+      if (target >= 0 && target < activeWork.chapters.length) {
+        activeChapIndex = target;
+        renderChapterBody();
+      }
+    }
+
+    function onChapterSelect(val) {
+      activeChapIndex = parseInt(val);
+      renderChapterBody();
+    }
+
+    // --- CUSTOMIZER & UI MODALS ---
+    function toggleSearchBar() {
+      document.getElementById('search-panel').classList.toggle('hidden');
+    }
+
+    function clearSearch() {
+      document.getElementById('search-input').value = '';
+      applyFilters();
+    }
+
+    function toggleReaderSettings() {
+      document.getElementById('reader-settings-panel').classList.toggle('hidden');
+    }
+
+    function setReaderTheme(theme) {
+      const rv = document.getElementById('reader-view');
+      rv.className = rv.className.replace(/theme-\w+/g, '');
+      rv.classList.add(`theme-${theme}`);
+    }
+
+    function setReaderFont(fontClass) {
+      const b = document.getElementById('reader-content-body');
+      b.className = b.className.replace(/font-\w+/g, '');
+      b.classList.add(fontClass);
+    }
+
+    function setReaderFontSize(sz) {
+      document.getElementById('reader-content-body').style.fontSize = `${sz}px`;
+      document.getElementById('font-size-label').textContent = `${sz}px`;
+    }
+
+    function openFilterModal() { document.getElementById('filter-modal').classList.remove('hidden'); }
+    function closeFilterModal() { document.getElementById('filter-modal').classList.add('hidden'); }
+    function openStorageModal() { document.getElementById('storage-modal').classList.remove('hidden'); }
+    function closeStorageModal() { document.getElementById('storage-modal').classList.add('hidden'); }
+
+    function applyFilters() { renderLibraryUI(); }
+    function resetFilters() {
+      document.getElementById('search-input').value = '';
+      document.getElementById('min-words-input').value = '';
+      document.getElementById('max-words-input').value = '';
+      document.querySelectorAll('.filter-rating-cb').forEach(c => c.checked = false);
+      document.querySelector('input[name="completion-filter"][value="all"]').checked = true;
+      renderLibraryUI();
+    }
+
+    function escapeHTML(s) {
+      return s ? s.replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])) : '';
+    }
+  </script>
 </body>
 </html>
