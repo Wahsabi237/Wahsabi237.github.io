@@ -984,7 +984,7 @@
     }
 
     function escapeHTML(s) {
-      return s ? s.replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\x27':'&#39;','"':'&quot;'}[c])) : '';
+      return s ? s.replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','&#39;':'&#39;','"':'&quot;'}[c])) : '';
     }
   </script>
 </body>
