@@ -3,9 +3,9 @@
   "name": "AO3 Offline Reader",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2702/2702134.png",
+      "src": "https://stardewvalleywiki.com/mediawiki/images/3/36/Lost_Book.png",
       "type": "image/png",
-      "sizes": "512x512",
+      "sizes": "96x96",
       "purpose": "any maskable"
     }
   ],
