@@ -67,14 +67,10 @@
     .rating-E { background-color: #880e4f; }
     .rating-NR { background-color: #616161; }
 
-    /* Reader Theme Layouts */
+    /* Reader Theme Layouts (Light and Sepia only) */
     #reader-view.theme-default { background-color: #ffffff; color: #0f172a; }
-    #reader-view.theme-dark { background-color: #0f172a; color: #e2e8f0; }
-    #reader-view.theme-dark a { color: #f87171; }
     #reader-view.theme-sepia { background-color: #fbf0d9; color: #362b1b; }
     #reader-view.theme-sepia a { color: #900000; }
-    #reader-view.theme-oled { background-color: #000000; color: #d4d4d4; }
-    #reader-view.theme-oled a { color: #ef4444; }
 
     .reader-body p { margin-bottom: 1.25em; }
     .reader-body blockquote {
@@ -185,44 +181,42 @@
 
     <!-- READER FULLSCREEN VIEW -->
     <div id="reader-view" class="absolute inset-0 bg-white z-50 overflow-y-auto hidden flex flex-col theme-default transition-colors duration-150">
-      <header class="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-between gap-2 shadow-sm">
+      <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-3 py-2 flex items-center justify-between gap-2 shadow-sm">
         <div class="flex items-center gap-2 min-w-0">
-          <button onclick="closeReaderView()" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition">
+          <button onclick="closeReaderView()" class="p-1.5 hover:bg-slate-100 rounded-full transition">
             <i data-lucide="arrow-left" class="w-5 h-5"></i>
           </button>
           <span id="reader-top-title" class="font-serif font-bold text-xs truncate max-w-[130px]"></span>
         </div>
 
         <div class="flex items-center gap-1">
-          <button onclick="navigateChapter(-1)" id="btn-prev-chap" class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30">
+          <button onclick="navigateChapter(-1)" id="btn-prev-chap" class="p-1 rounded hover:bg-slate-100 disabled:opacity-30">
             <i data-lucide="chevron-left" class="w-4 h-4"></i>
           </button>
-          <select id="reader-chapter-dropdown" onchange="onChapterSelect(this.value)" class="text-xs border border-slate-300 dark:border-slate-700 rounded px-1 py-1 max-w-[110px] bg-transparent focus:outline-none"></select>
-          <button onclick="navigateChapter(1)" id="btn-next-chap" class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30">
+          <select id="reader-chapter-dropdown" onchange="onChapterSelect(this.value)" class="text-xs border border-slate-300 rounded px-1 py-1 max-w-[110px] bg-transparent focus:outline-none"></select>
+          <button onclick="navigateChapter(1)" id="btn-next-chap" class="p-1 rounded hover:bg-slate-100 disabled:opacity-30">
             <i data-lucide="chevron-right" class="w-4 h-4"></i>
           </button>
         </div>
 
-        <button onclick="toggleReaderSettings()" class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition">
+        <button onclick="toggleReaderSettings()" class="p-1.5 hover:bg-slate-100 rounded-full transition">
           <i data-lucide="settings-2" class="w-5 h-5"></i>
         </button>
       </header>
 
-      <div id="reader-settings-panel" class="hidden sticky top-10 z-40 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-3 shadow-md space-y-3 text-xs">
+      <div id="reader-settings-panel" class="hidden sticky top-10 z-40 bg-slate-50 border-b border-slate-200 p-3 shadow-md space-y-3 text-xs">
         <div>
           <label class="block text-[10px] font-bold text-slate-400 mb-1">THEME</label>
-          <div class="grid grid-cols-4 gap-1.5">
+          <div class="grid grid-cols-2 gap-2">
             <button onclick="setReaderTheme('default')" class="py-1 rounded border bg-white text-slate-900 font-medium">Light</button>
-            <button onclick="setReaderTheme('dark')" class="py-1 rounded border bg-slate-900 text-slate-100 font-medium border-slate-700">Dark</button>
             <button onclick="setReaderTheme('sepia')" class="py-1 rounded border bg-[#fbf0d9] text-[#362b1b] font-medium border-amber-300">Sepia</button>
-            <button onclick="setReaderTheme('oled')" class="py-1 rounded border bg-black text-slate-400 font-medium border-zinc-800">OLED</button>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-[10px] font-bold text-slate-400 mb-1">FONT</label>
-            <select id="reader-font-family" onchange="setReaderFont(this.value)" class="w-full p-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900">
+            <select id="reader-font-family" onchange="setReaderFont(this.value)" class="w-full p-1 rounded border border-slate-300 bg-white">
               <option value="font-serif">Georgia</option>
               <option value="font-sans">Inter</option>
               <option value="font-mono">Monospace</option>
@@ -240,17 +234,17 @@
       </div>
 
       <div class="flex-1 px-4 py-5 max-w-2xl mx-auto w-full">
-        <div id="reader-meta-header" class="mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 space-y-2">
+        <div id="reader-meta-header" class="mb-6 pb-4 border-b border-slate-200 space-y-2">
           <h1 id="reader-title" class="text-xl font-serif font-bold text-center text-ao3-red leading-tight"></h1>
           <p id="reader-author" class="text-center text-xs opacity-75 font-medium"></p>
-          <div id="reader-tags-box" class="bg-black/5 dark:bg-white/5 p-3 rounded-lg text-[11px] space-y-1 mt-3"></div>
+          <div id="reader-tags-box" class="bg-black/5 p-3 rounded-lg text-[11px] space-y-1 mt-3"></div>
           <div id="reader-summary-box" class="italic text-xs opacity-90 border-l-2 border-ao3-red pl-2.5 my-2"></div>
         </div>
         <article id="reader-content-body" class="reader-body selectable-text font-serif text-base leading-relaxed"></article>
-        <div class="flex justify-between items-center my-8 pt-3 border-t border-slate-200 dark:border-slate-800">
-          <button onclick="navigateChapter(-1)" id="btn-bottom-prev" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">&larr; Previous Chapter</button>
+        <div class="flex justify-between items-center my-8 pt-3 border-t border-slate-200">
+          <button onclick="navigateChapter(-1)" id="btn-bottom-prev" class="px-3 py-1.5 bg-slate-200 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">&larr; Previous Chapter</button>
           <button onclick="document.getElementById('reader-view').scrollTo({top: 0, behavior: 'smooth'})" class="text-[11px] opacity-70 underline">Top</button>
-          <button onclick="navigateChapter(1)" id="btn-bottom-next" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">Next Chapter &rarr;</button>
+          <button onclick="navigateChapter(1)" id="btn-bottom-next" class="px-3 py-1.5 bg-slate-200 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">Next Chapter &rarr;</button>
         </div>
       </div>
     </div>
@@ -534,24 +528,49 @@
           const parser = new DOMParser();
           const doc = parser.parseFromString(contentText, 'text/html');
 
+          // Look for explicit AO3 meta tags or headers
           if (i === 0 || contentText.includes('Fandom:') || contentText.includes('Rating:')) {
-            const getMeta = (lbl) => {
-              const nodes = Array.from(doc.querySelectorAll('dt, b, strong, span, p'));
-              for (let node of nodes) {
-                if (node.textContent && node.textContent.toLowerCase().includes(lbl.toLowerCase())) {
-                  const target = node.nextElementSibling || node.parentElement.nextElementSibling;
-                  if (target && target.textContent) return target.textContent.trim();
+            const getMetaValue = (label) => {
+              const elements = Array.from(doc.querySelectorAll('dt, b, strong, span, p, th'));
+              for (let el of elements) {
+                if (el.textContent && el.textContent.toLowerCase().includes(label.toLowerCase())) {
+                  let sibling = el.nextElementSibling || (el.parentElement ? el.parentElement.nextElementSibling : null);
+                  if (sibling && sibling.textContent.trim()) {
+                    return sibling.textContent.trim();
+                  }
+                  // Fallback: check parent text content minus label
+                  let parentText = el.parentElement ? el.parentElement.textContent.trim() : '';
+                  if (parentText.length > label.length) {
+                    return parentText.replace(new RegExp(label, 'i'), '').trim();
+                  }
                 }
               }
               return null;
             };
 
-            rating = getMeta('Rating:') || rating;
-            const f = getMeta('Fandom:'); if (f) fandoms = f.split(',').map(s => s.trim());
-            const r = getMeta('Relationship:') || getMeta('Relationships:'); if (r) relationships = r.split(',').map(s => s.trim());
-            const c = getMeta('Char:') || getMeta('Characters:'); if (c) characters = c.split(',').map(s => s.trim());
-            const t = getMeta('Tags:'); if (t) tags = t.split(',').map(s => s.trim());
-            const sumNode = doc.querySelector('blockquote') || doc.querySelector('.summary');
+            const extractedTitle = doc.querySelector('h1.title') || doc.querySelector('h1');
+            if (extractedTitle && extractedTitle.textContent.trim()) {
+              title = extractedTitle.textContent.trim();
+            }
+
+            const extractedAuthor = getMetaValue('Author:') || getMetaValue('by');
+            if (extractedAuthor) author = extractedAuthor.replace(/^by\s+/i, '');
+
+            rating = getMetaValue('Rating:') || rating;
+            
+            const f = getMetaValue('Fandom:'); 
+            if (f) fandoms = f.split(',').map(s => s.trim()).filter(Boolean);
+
+            const r = getMetaValue('Relationship:') || getMetaValue('Relationships:'); 
+            if (r) relationships = r.split(',').map(s => s.trim()).filter(Boolean);
+
+            const c = getMetaValue('Char:') || getMetaValue('Characters:'); 
+            if (c) characters = c.split(',').map(s => s.trim()).filter(Boolean);
+
+            const t = getMetaValue('Tags:'); 
+            if (t) tags = t.split(',').map(s => s.trim()).filter(Boolean);
+
+            const sumNode = doc.querySelector('blockquote.summary') || doc.querySelector('.summary') || doc.querySelector('blockquote');
             if (sumNode) summary = sumNode.innerHTML;
           }
 
@@ -560,14 +579,16 @@
             totalWords += rawText.trim().split(/\s+/).filter(Boolean).length;
             let cTitle = `Chapter ${chapters.length + 1}`;
             const header = doc.querySelector('h1, h2, h3');
-            if (header && header.textContent.trim()) cTitle = header.textContent.trim();
+            if (header && header.textContent.trim() && header.textContent.length < 60) {
+              cTitle = header.textContent.trim();
+            }
             chapters.push({ title: cTitle, content: doc.body.innerHTML });
           }
         }
 
         const workRecord = {
           id: 'work-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-          title: title || 'Untitled Work',
+          title: title || file.name.replace('.epub', ''),
           author: author || 'Unknown Author',
           rating: rating || 'General Audiences',
           fandoms: fandoms.length ? fandoms : ['General Fandom'],
