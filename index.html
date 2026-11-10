@@ -91,7 +91,7 @@
 </head>
 <body class="bg-slate-200 text-slate-900 min-h-screen flex justify-center items-center p-0 sm:p-4 font-sans">
 
-  <div class="w-full max-w-md h-screen sm:h-[844px] bg-slate-55 flex flex-col shadow-2xl sm:rounded-3xl overflow-hidden relative border border-slate-300">
+  <div class="w-full max-w-md h-screen sm:h-[844px] bg-slate-50 flex flex-col shadow-2xl sm:rounded-3xl overflow-hidden relative border border-slate-300">
 
     <header id="standard-app-bar" class="bg-ao3-red text-white px-4 py-3 flex items-center justify-between shadow-md shrink-0 z-20">
       <div class="flex items-center space-x-2.5">
@@ -523,6 +523,7 @@
         });
         htmlFiles.sort();
 
+        // 1. Dedicated Metadata Pass: Extract title, author, rating, tags, and summary cleanly from the summary/cover file
         for (let i = 0; i < htmlFiles.length; i++) {
           const contentText = await zip.file(htmlFiles[i]).async('text');
           const parser = new DOMParser();
@@ -545,44 +546,31 @@
             return null;
           };
 
-          const extractedTitle = doc.querySelector('h1.title') || doc.querySelector('h1');
-          if (i === 0 && extractedTitle && extractedTitle.textContent.trim()) {
-            title = extractedTitle.textContent.trim();
+          if (i === 0) {
+            const extractedTitle = doc.querySelector('h1.title') || doc.querySelector('h1');
+            if (extractedTitle && extractedTitle.textContent.trim()) {
+              title = extractedTitle.textContent.trim();
+            }
+            rating = getMetaValue('Rating:') || rating;
+            const f = getMetaValue('Fandom:'); if (f) fandoms = f.split(',').map(s => s.trim()).filter(Boolean);
+            const r = getMetaValue('Relationship:') || getMetaValue('Relationships:'); if (r) relationships = r.split(',').map(s => s.trim()).filter(Boolean);
+            const c = getMetaValue('Char:') || getMetaValue('Characters:'); if (c) characters = c.split(',').map(s => s.trim()).filter(Boolean);
+            const t = getMetaValue('Tags:'); if (t) tags = t.split(',').map(s => s.trim()).filter(Boolean);
           }
 
           const extractedAuthor = getMetaValue('Author:') || getMetaValue('by');
           if (extractedAuthor) {
             author = extractedAuthor.replace(/^by\s+/i, '').trim();
-          } else {
-            const byLine = doc.querySelector('h2, .byline, p');
-            if (byLine && byLine.textContent.includes('by ')) {
-              let parts = byLine.textContent.split('by ');
-              if (parts[1]) author = parts[1].trim().split('\n')[0];
-            }
           }
 
-          rating = getMetaValue('Rating:') || rating;
-          
-          const f = getMetaValue('Fandom:'); 
-          if (f) fandoms = f.split(',').map(s => s.trim()).filter(Boolean);
-
-          const r = getMetaValue('Relationship:') || getMetaValue('Relationships:'); 
-          if (r) relationships = r.split(',').map(s => s.trim()).filter(Boolean);
-
-          const c = getMetaValue('Char:') || getMetaValue('Characters:'); 
-          if (c) characters = c.split(',').map(s => s.trim()).filter(Boolean);
-
-          const t = getMetaValue('Tags:'); 
-          if (t) tags = t.split(',').map(s => s.trim()).filter(Boolean);
-
-          // Bulletproof summary extraction targeting both standalone title pages and in-chapter headers
+          // Strict target for AO3 summary blocks
           if (!summary) {
-            const sumNode = doc.querySelector('.summary blockquote') || 
-                            doc.querySelector('blockquote.summary') || 
-                            doc.querySelector('.summary') || 
-                            doc.querySelector('div.summary');
-            if (sumNode && sumNode.innerHTML.trim()) {
-              summary = sumNode.innerHTML.trim();
+            const sumBlock = doc.querySelector('.summary blockquote') || 
+                             doc.querySelector('blockquote.summary') || 
+                             doc.querySelector('.summary') || 
+                             doc.querySelector('div.summary');
+            if (sumBlock && sumBlock.innerHTML.trim()) {
+              summary = sumBlock.innerHTML.trim();
             } else {
               const headings = Array.from(doc.querySelectorAll('h2, h3, b, strong'));
               for (let h of headings) {
@@ -594,10 +582,23 @@
               }
             }
           }
+        }
+
+        // 2. Narrative Pass: Build clean chapters, excluding the standalone metadata page so summaries aren't duplicated as pages
+        for (let i = 0; i < htmlFiles.length; i++) {
+          const contentText = await zip.file(htmlFiles[i]).async('text');
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(contentText, 'text/html');
 
           if (doc.body) {
-            const rawText = doc.body.textContent || '';
-            totalWords += rawText.trim().split(/\s+/).filter(Boolean).length;
+            const bodyText = doc.body.textContent || '';
+            const isCoverPage = (i === 0 && htmlFiles.length > 1 && (bodyText.includes('Fandom:') || bodyText.includes('Rating:') || bodyText.includes('Summary')));
+            
+            if (isCoverPage) {
+              continue; // Skip the metadata cover page entirely from chapter navigation
+            }
+
+            totalWords += bodyText.trim().split(/\s+/).filter(Boolean).length;
             
             let cTitle = `Chapter ${chapters.length + 1}`;
             const header = doc.querySelector('h1, h2, h3');
@@ -605,13 +606,15 @@
               cTitle = header.textContent.trim();
             }
 
-            let chapterHtml = doc.body.innerHTML;
-            if (i === 0 && htmlFiles.length > 1) {
-              chapterHtml = `<div class="mb-6 p-3 bg-slate-100 rounded-lg text-xs italic text-slate-700">${chapterHtml}</div><hr class="my-6 border-slate-300">`;
-            }
-
-            chapters.push({ title: cTitle, content: chapterHtml });
+            chapters.push({
+              title: cTitle,
+              content: doc.body.innerHTML
+            });
           }
+        }
+
+        if (chapters.length === 0) {
+          chapters.push({ title: 'Work', content: '<p>Empty work.</p>' });
         }
 
         const workRecord = {
@@ -625,11 +628,11 @@
           tags: tags || [],
           summary: summary || '<p>No summary provided.</p>',
           words: totalWords || 0,
-          chaptersCount: chapters.length || 1,
+          chaptersCount: chapters.length,
           isComplete: true,
           dateAdded: new Date().toISOString(),
           lastReadChapter: 0,
-          chapters: chapters.length ? chapters : [{ title: 'Work', content: '<p>Empty work.</p>' }]
+          chapters: chapters
         };
 
         await saveWorkToDB(workRecord);
