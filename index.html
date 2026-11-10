@@ -72,9 +72,20 @@
     #reader-view.theme-sepia { background-color: #fbf0d9; color: #362b1b; }
     #reader-view.theme-sepia a { color: #900000; }
 
-    .reader-body p { margin-bottom: 1.25em; }
+    /* Generous Spacing for Readability */
+    .reader-body {
+      line-height: 1.8;
+      letter-spacing: 0.01em;
+    }
+    .reader-body p { 
+      margin-bottom: 1.5em; 
+    }
     .reader-body blockquote {
-      border-left: 3px solid #900000; padding-left: 0.75rem; margin-left: 0; opacity: 0.85; font-style: italic;
+      border-left: 3px solid #900000; 
+      padding-left: 1rem; 
+      margin: 1.5em 0; 
+      opacity: 0.85; 
+      font-style: italic;
     }
   </style>
 </head>
@@ -101,7 +112,7 @@
           <i data-lucide="sliders-horizontal" class="w-5 h-5"></i>
           <span id="active-filter-indicator" class="hidden absolute top-1 right-1 bg-white text-ao3-red rounded-full text-[9px] w-3.5 h-3.5 font-bold flex items-center justify-center">!</span>
         </button>
-        <button id="pwa-install-btn" onclick="promptPWAInstall()" class="hidden p-2 hover:bg-red-800 rounded-full transition text-yellow-300">
+        <button id="pwa-install-btn" onclick="promptPWAInstall()" class="hidden p-2 hover:bg-red-800 rounded-full transition text-yellow-300" title="Install App">
           <i data-lucide="download" class="w-5 h-5"></i>
         </button>
       </div>
@@ -229,18 +240,24 @@
         </div>
       </div>
 
-      <div class="flex-1 px-4 py-5 max-w-2xl mx-auto w-full">
-        <div id="reader-meta-header" class="mb-6 pb-4 border-b border-slate-200 space-y-2">
-          <h1 id="reader-title" class="text-xl font-serif font-bold text-center text-ao3-red leading-tight"></h1>
-          <p id="reader-author" class="text-center text-xs opacity-75 font-medium"></p>
-          <div id="reader-tags-box" class="bg-black/5 p-3 rounded-lg text-[11px] space-y-1 mt-3"></div>
-          <div id="reader-summary-box" class="italic text-xs opacity-90 border-l-2 border-ao3-red pl-2.5 my-2"></div>
+      <div class="flex-1 px-4 py-6 max-w-2xl mx-auto w-full space-y-6">
+        <div class="text-center space-y-2 pb-4 border-b border-slate-200">
+          <h1 id="reader-title" class="text-xl font-serif font-bold text-ao3-red leading-tight"></h1>
+          <p id="reader-author" class="text-xs opacity-75 font-medium"></p>
         </div>
-        <article id="reader-content-body" class="reader-body selectable-text font-serif text-base leading-relaxed"></article>
-        <div class="flex justify-between items-center my-8 pt-3 border-t border-slate-200">
-          <button onclick="navigateChapter(-1)" id="btn-bottom-prev" class="px-3 py-1.5 bg-slate-200 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">&larr; Previous Chapter</button>
-          <button onclick="document.getElementById('reader-view').scrollTo({top: 0, behavior: 'smooth'})" class="text-[11px] opacity-70 underline">Top</button>
-          <button onclick="navigateChapter(1)" id="btn-bottom-next" class="px-3 py-1.5 bg-slate-200 rounded text-xs font-semibold hover:bg-ao3-red hover:text-white transition">Next Chapter &rarr;</button>
+
+        <!-- ENCLOSED CHAPTER META BOX WITH SUMMARY INCLUDED -->
+        <div id="chapter-meta-box" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-3 shadow-sm font-sans">
+          <div id="reader-tags-box" class="space-y-2 text-[11px] text-slate-700"></div>
+          <div id="reader-summary-box" class="italic text-[11px] text-slate-600 border-l-2 border-ao3-red pl-2.5 py-0.5 space-y-1"></div>
+        </div>
+
+        <article id="reader-content-body" class="reader-body selectable-text font-serif text-base leading-relaxed space-y-4"></article>
+        
+        <div class="flex justify-between items-center my-10 pt-4 border-t border-slate-200">
+          <button onclick="navigateChapter(-1)" id="btn-bottom-prev" class="px-3.5 py-2 bg-slate-200 rounded-lg text-xs font-semibold hover:bg-ao3-red hover:text-white transition">&larr; Previous Chapter</button>
+          <button onclick="document.getElementById('reader-view').scrollTo({top: 0, behavior: 'smooth'})" class="text-xs opacity-70 underline">Top</button>
+          <button onclick="navigateChapter(1)" id="btn-bottom-next" class="px-3.5 py-2 bg-slate-200 rounded-lg text-xs font-semibold hover:bg-ao3-red hover:text-white transition">Next Chapter &rarr;</button>
         </div>
       </div>
     </div>
@@ -511,7 +528,7 @@
           const parser = new DOMParser();
           const doc = parser.parseFromString(contentText, 'text/html');
 
-          if (i === 0 || contentText.includes('Fandom:') || contentText.includes('Rating:')) {
+          if (i === 0 || contentText.includes('Fandom:') || contentText.includes('Rating:') || contentText.includes('Summary')) {
             const getMetaValue = (label) => {
               const elements = Array.from(doc.querySelectorAll('dt, b, strong, span, p, th'));
               for (let el of elements) {
@@ -551,7 +568,6 @@
             const t = getMetaValue('Tags:'); 
             if (t) tags = t.split(',').map(s => s.trim()).filter(Boolean);
 
-            // Comprehensive selector check for AO3 summary blocks
             const sumNode = doc.querySelector('.summary blockquote') || 
                             doc.querySelector('blockquote.summary') || 
                             doc.querySelector('.summary') || 
@@ -570,7 +586,12 @@
             if (header && header.textContent.trim() && header.textContent.length < 60) {
               cTitle = header.textContent.trim();
             }
-            chapters.push({ title: cTitle, content: doc.body.innerHTML });
+            
+            // Skip storing the raw metadata/summary intro page as a narrative chapter if it repeats chapter 1 info
+            const isMetaIntroPage = (i === 0 && (contentText.includes('Summary') || contentText.includes('Fandom:')) && htmlFiles.length > 1);
+            if (!isMetaIntroPage) {
+              chapters.push({ title: cTitle, content: doc.body.innerHTML });
+            }
           }
         }
 
@@ -704,7 +725,7 @@
             </div>
           ` : ''}
 
-          <div class="bg-slate-50 border-l-2 border-ao3-red p-2 rounded-r text-[11px] text-slate-600 italic line-clamp-3">${work.summary}</div>
+          <div class="bg-slate-50 border-l-2 border-ao3-red p-2.5 rounded-r text-[11px] text-slate-600 italic line-clamp-3">${work.summary}</div>
           
           <div class="flex items-center justify-between text-[10px] text-slate-400 pt-1.5 border-t border-slate-100">
             <span>${(work.words || 0).toLocaleString()} words • ${work.chaptersCount} chap</span>
@@ -780,13 +801,26 @@
       document.getElementById('reader-top-title').textContent = activeWork.title;
       document.getElementById('reader-title').textContent = activeWork.title;
       document.getElementById('reader-author').textContent = `by ${activeWork.author}`;
+      
+      // Enclosed Chapter Metadata Box with Summary included properly
       document.getElementById('reader-tags-box').innerHTML = `
-        <p><strong>Rating:</strong> ${activeWork.rating}</p>
-        <p><strong>Fandoms:</strong> ${activeWork.fandoms.join(', ')}</p>
-        <p><strong>Relationships:</strong> ${(activeWork.relationships || []).join(', ') || 'None'}</p>
-        ${(activeWork.tags && activeWork.tags.length) ? `<p><strong>Tags:</strong> ${activeWork.tags.join(', ')}</p>` : ''}
+        <div class="flex flex-wrap gap-1.5 items-center">
+          <span class="font-bold text-slate-500">Rating:</span> <span class="bg-slate-200 px-1.5 py-0.5 rounded text-[10px]">${activeWork.rating}</span>
+          <span class="font-bold text-slate-500 ml-2">Fandom:</span> <span>${activeWork.fandoms.join(', ')}</span>
+        </div>
+        ${activeWork.relationships && activeWork.relationships.length ? `
+          <div class="flex flex-wrap gap-1 items-center">
+            <span class="font-bold text-slate-500">Pairing:</span> <strong class="text-ao3-tagRel">${activeWork.relationships.join(', ')}</strong>
+          </div>
+        ` : ''}
+        ${activeWork.tags && activeWork.tags.length ? `
+          <div class="flex flex-wrap gap-1 pt-1">
+            ${activeWork.tags.map(t => `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] border border-slate-200">${escapeHTML(t)}</span>`).join('')}
+          </div>
+        ` : ''}
       `;
-      document.getElementById('reader-summary-box').innerHTML = `<strong>Summary:</strong> ${activeWork.summary}`;
+      document.getElementById('reader-summary-box').innerHTML = `<strong class="text-slate-700">Summary:</strong> ${activeWork.summary}`;
+      
       const drop = document.getElementById('reader-chapter-dropdown');
       drop.innerHTML = activeWork.chapters.map((c, i) => `<option value="${i}">${c.title || `Chapter ${i+1}`}</option>`).join('');
       renderChapterBody();
