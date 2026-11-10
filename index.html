@@ -150,12 +150,7 @@
         </div>
       </div>
 
-      <div id="dropzone" class="border-2 border-dashed border-red-300 bg-red-50/50 rounded-xl p-4 text-center cursor-pointer transition hover:bg-red-50" onclick="triggerFileInput()">
-        <i data-lucide="folder-plus" class="w-7 h-7 text-ao3-red mx-auto mb-1"></i>
-        <p class="text-xs font-semibold text-ao3-red">Tap or Drag & Drop .EPUB or .PDF files</p>
-        <p class="text-[10px] text-slate-400 mt-0.5">Files persist in device IndexedDB automatically</p>
-      </div>
-
+      <!-- Story Cards Container -->
       <div id="fic-card-container" class="space-y-3"></div>
     </main>
 
@@ -382,7 +377,6 @@
 
     window.onload = async function() {
       lucide.createIcons();
-      setupDragAndDrop();
       registerInlineServiceWorker();
       try {
         await initDB();
@@ -419,18 +413,6 @@
           document.getElementById('pwa-install-btn').classList.add('hidden');
         });
       }
-    }
-
-    function triggerFileInput() { document.getElementById('epub-input').click(); }
-    function setupDragAndDrop() {
-      const dropzone = document.getElementById('dropzone');
-      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
-        dropzone.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
-      });
-      dropzone.addEventListener('drop', (e) => {
-        const files = e.dataTransfer.files;
-        if (files && files.length) processFiles(files);
-      });
     }
 
     function handleFileUpload(event) {
@@ -528,7 +510,6 @@
           const parser = new DOMParser();
           const doc = parser.parseFromString(contentText, 'text/html');
 
-          // Look for explicit AO3 meta tags or headers
           if (i === 0 || contentText.includes('Fandom:') || contentText.includes('Rating:')) {
             const getMetaValue = (label) => {
               const elements = Array.from(doc.querySelectorAll('dt, b, strong, span, p, th'));
@@ -538,7 +519,6 @@
                   if (sibling && sibling.textContent.trim()) {
                     return sibling.textContent.trim();
                   }
-                  // Fallback: check parent text content minus label
                   let parentText = el.parentElement ? el.parentElement.textContent.trim() : '';
                   if (parentText.length > label.length) {
                     return parentText.replace(new RegExp(label, 'i'), '').trim();
@@ -622,9 +602,9 @@
 
       if (filtered.length === 0) {
         container.innerHTML = `
-          <div class="bg-white rounded-xl p-6 text-center border border-slate-200">
+          <div class="bg-white rounded-xl p-6 text-center border border-slate-200 mt-2">
             <i data-lucide="book-open" class="w-8 h-8 text-slate-300 mx-auto mb-2"></i>
-            <p class="text-xs text-slate-500 font-semibold">No works match your current filters or library is empty.</p>
+            <p class="text-xs text-slate-500 font-semibold">Your library is empty. Tap the red (+) button to add files.</p>
           </div>`;
         lucide.createIcons();
         return;
@@ -704,10 +684,15 @@
             <span class="text-slate-400 font-medium">Fandom:</span> <strong class="text-slate-800">${work.fandoms.join(', ')}</strong>
           </div>
 
-          ${(work.relationships && work.relationships.length > 0) || (work.tags && work.tags.length > 0) ? `
+          ${(work.relationships && work.relationships.length > 0) ? `
+            <div class="text-[11px] text-slate-700">
+              <span class="text-slate-400 font-medium">Pairing:</span> <strong class="text-ao3-tagRel">${work.relationships.join(', ')}</strong>
+            </div>
+          ` : ''}
+
+          ${(work.tags && work.tags.length > 0) ? `
             <div class="flex flex-wrap gap-1.5 text-[10px] pt-0.5">
-              ${(work.relationships || []).map(r => `<span class="bg-red-50 text-ao3-tagRel border border-red-200 px-1.5 py-0.5 rounded font-medium">${escapeHTML(r)}</span>`).join('')}
-              ${(work.tags || []).map(t => `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">${escapeHTML(t)}</span>`).join('')}
+              ${work.tags.map(t => `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">${escapeHTML(t)}</span>`).join('')}
             </div>
           ` : ''}
 
