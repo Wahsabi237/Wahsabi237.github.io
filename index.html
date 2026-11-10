@@ -9,7 +9,7 @@
   <title>AO3 Offline Reader</title>
 
   <!-- PWA Manifest Link -->
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest.json" type="application/manifest+json">
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -67,7 +67,7 @@
     .rating-E { background-color: #880e4f; }
     .rating-NR { background-color: #616161; }
 
-    /* Reader Theme Layouts (Light and Sepia only) */
+    /* Reader Themes (Light and Sepia) */
     #reader-view.theme-default { background-color: #ffffff; color: #0f172a; }
     #reader-view.theme-sepia { background-color: #fbf0d9; color: #362b1b; }
     #reader-view.theme-sepia a { color: #900000; }
@@ -158,7 +158,7 @@
     <label for="epub-input" class="absolute bottom-16 right-4 bg-ao3-red hover:bg-ao3-redHover text-white p-3.5 rounded-full shadow-xl cursor-pointer transition transform active:scale-95 z-30 flex items-center justify-center border border-red-700">
       <i data-lucide="plus" class="w-6 h-6"></i>
     </label>
-    <input type="file" id="epub-input" accept=".epub,.pdf" multiple class="hidden" onchange="handleFileUpload(event)">
+    <input type="file" id="epub-input" accept=".epub,.pdf,application/epub+zip,application/pdf" multiple class="hidden" onchange="handleFileUpload(event)">
 
     <nav class="bg-white border-t border-slate-200 h-14 shrink-0 flex items-center justify-around z-20 text-[11px] font-medium text-slate-500">
       <button onclick="switchTab('library')" id="nav-tab-library" class="flex flex-col items-center justify-center w-full h-full text-ao3-red">
@@ -511,7 +511,6 @@
           const parser = new DOMParser();
           const doc = parser.parseFromString(contentText, 'text/html');
 
-          // Target AO3 metadata structures specifically on EPUB files
           if (i === 0 || contentText.includes('Fandom:') || contentText.includes('Rating:')) {
             const getMetaValue = (label) => {
               const elements = Array.from(doc.querySelectorAll('dt, b, strong, span, p, th'));
@@ -552,8 +551,15 @@
             const t = getMetaValue('Tags:'); 
             if (t) tags = t.split(',').map(s => s.trim()).filter(Boolean);
 
-            const sumNode = doc.querySelector('blockquote.summary') || doc.querySelector('.summary') || doc.querySelector('blockquote');
-            if (sumNode) summary = sumNode.innerHTML;
+            // Comprehensive selector check for AO3 summary blocks
+            const sumNode = doc.querySelector('.summary blockquote') || 
+                            doc.querySelector('blockquote.summary') || 
+                            doc.querySelector('.summary') || 
+                            doc.querySelector('.userstuff blockquote') || 
+                            doc.querySelector('blockquote');
+            if (sumNode && sumNode.innerHTML.trim()) {
+              summary = sumNode.innerHTML.trim();
+            }
           }
 
           if (doc.body) {
