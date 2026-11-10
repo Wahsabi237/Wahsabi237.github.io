@@ -528,47 +528,57 @@
           const parser = new DOMParser();
           const doc = parser.parseFromString(contentText, 'text/html');
 
-          if (i === 0 || contentText.includes('Fandom:') || contentText.includes('Rating:') || contentText.includes('Summary')) {
-            const getMetaValue = (label) => {
-              const elements = Array.from(doc.querySelectorAll('dt, b, strong, span, p, th'));
-              for (let el of elements) {
-                if (el.textContent && el.textContent.toLowerCase().includes(label.toLowerCase())) {
-                  let sibling = el.nextElementSibling || (el.parentElement ? el.parentElement.nextElementSibling : null);
-                  if (sibling && sibling.textContent.trim()) {
-                    return sibling.textContent.trim();
-                  }
-                  let parentText = el.parentElement ? el.parentElement.textContent.trim() : '';
-                  if (parentText.length > label.length) {
-                    return parentText.replace(new RegExp(label, 'i'), '').trim();
-                  }
+          const getMetaValue = (label) => {
+            const elements = Array.from(doc.querySelectorAll('dt, b, strong, span, p, th'));
+            for (let el of elements) {
+              if (el.textContent && el.textContent.toLowerCase().includes(label.toLowerCase())) {
+                let sibling = el.nextElementSibling || (el.parentElement ? el.parentElement.nextElementSibling : null);
+                if (sibling && sibling.textContent.trim()) {
+                  return sibling.textContent.trim();
+                }
+                let parentText = el.parentElement ? el.parentElement.textContent.trim() : '';
+                if (parentText.length > label.length) {
+                  return parentText.replace(new RegExp(label, 'i'), '').trim();
                 }
               }
-              return null;
-            };
-
-            const extractedTitle = doc.querySelector('h1.title') || doc.querySelector('h1');
-            if (extractedTitle && extractedTitle.textContent.trim()) {
-              title = extractedTitle.textContent.trim();
             }
+            return null;
+          };
 
-            const extractedAuthor = getMetaValue('Author:') || getMetaValue('by');
-            if (extractedAuthor) author = extractedAuthor.replace(/^by\s+/i, '');
+          // Extract title if present
+          const extractedTitle = doc.querySelector('h1.title') || doc.querySelector('h1');
+          if (i === 0 && extractedTitle && extractedTitle.textContent.trim()) {
+            title = extractedTitle.textContent.trim();
+          }
 
-            rating = getMetaValue('Rating:') || rating;
-            
-            const f = getMetaValue('Fandom:'); 
-            if (f) fandoms = f.split(',').map(s => s.trim()).filter(Boolean);
+          // Extract author from metadata or byline
+          const extractedAuthor = getMetaValue('Author:') || getMetaValue('by');
+          if (extractedAuthor) {
+            author = extractedAuthor.replace(/^by\s+/i, '').trim();
+          } else {
+            const byLine = doc.querySelector('h2, .byline, p');
+            if (byLine && byLine.textContent.includes('by ')) {
+              let parts = byLine.textContent.split('by ');
+              if (parts[1]) author = parts[1].trim().split('\n')[0];
+            }
+          }
 
-            const r = getMetaValue('Relationship:') || getMetaValue('Relationships:'); 
-            if (r) relationships = r.split(',').map(s => s.trim()).filter(Boolean);
+          rating = getMetaValue('Rating:') || rating;
+          
+          const f = getMetaValue('Fandom:'); 
+          if (f) fandoms = f.split(',').map(s => s.trim()).filter(Boolean);
 
-            const c = getMetaValue('Char:') || getMetaValue('Characters:'); 
-            if (c) characters = c.split(',').map(s => s.trim()).filter(Boolean);
+          const r = getMetaValue('Relationship:') || getMetaValue('Relationships:'); 
+          if (r) relationships = r.split(',').map(s => s.trim()).filter(Boolean);
 
-            const t = getMetaValue('Tags:'); 
-            if (t) tags = t.split(',').map(s => s.trim()).filter(Boolean);
+          const c = getMetaValue('Char:') || getMetaValue('Characters:'); 
+          if (c) characters = c.split(',').map(s => s.trim()).filter(Boolean);
 
-            // Robust AO3 summary extraction from summary section
+          const t = getMetaValue('Tags:'); 
+          if (t) tags = t.split(',').map(s => s.trim()).filter(Boolean);
+
+          // Extract summary from any matching summary container or blockquote
+          if (!summary) {
             const sumNode = doc.querySelector('.summary blockquote') || 
                             doc.querySelector('blockquote.summary') || 
                             doc.querySelector('.summary') || 
@@ -576,11 +586,11 @@
             if (sumNode && sumNode.innerHTML.trim()) {
               summary = sumNode.innerHTML.trim();
             } else {
-              // Fallback text check
-              const paras = doc.querySelectorAll('p, div');
-              for (let p of paras) {
-                if (p.textContent.trim().toLowerCase().startsWith('summary:')) {
-                  summary = p.innerHTML.replace(/^summary:\s*/i, '');
+              const headings = Array.from(doc.querySelectorAll('h2, h3, b, strong'));
+              for (let h of headings) {
+                if (h.textContent.trim().toLowerCase() === 'summary') {
+                  let next = h.nextElementSibling;
+                  if (next) summary = next.innerHTML;
                   break;
                 }
               }
@@ -590,17 +600,21 @@
           if (doc.body) {
             const rawText = doc.body.textContent || '';
             totalWords += rawText.trim().split(/\s+/).filter(Boolean).length;
+            
             let cTitle = `Chapter ${chapters.length + 1}`;
             const header = doc.querySelector('h1, h2, h3');
             if (header && header.textContent.trim() && header.textContent.length < 60) {
               cTitle = header.textContent.trim();
             }
-            
-            // Skip storing the raw metadata/summary intro page as a narrative chapter
-            const isMetaIntroPage = (i === 0 && (contentText.includes('Summary') || contentText.includes('Fandom:')) && htmlFiles.length > 1);
-            if (!isMetaIntroPage) {
-              chapters.push({ title: cTitle, content: doc.body.innerHTML });
+
+            // Clean up the chapter content: if the file contains the title/author/summary preface, keep it as part of the chapter body separated with a horizontal rule `<hr>` instead of hiding the file entirely!
+            let chapterHtml = doc.body.innerHTML;
+            if (i === 0 && htmlFiles.length > 1) {
+              // Wrap preface items cleanly or insert a separator if it contains summary/notes
+              chapterHtml = `<div class="mb-6 p-3 bg-slate-100 rounded-lg text-xs italic text-slate-700">${chapterHtml}</div><hr class="my-6 border-slate-300">`;
             }
+
+            chapters.push({ title: cTitle, content: chapterHtml });
           }
         }
 
@@ -687,4 +701,216 @@
       let rClass = 'rating-NR', rLabel = 'NR';
       const ratingStr = work.rating || '';
       if (ratingStr.includes('General')) { rClass = 'rating-G'; rLabel = 'G'; }
-      else if (
+      else if (ratingStr.includes('Teen')) { rClass = 'rating-T'; rLabel = 'T'; }
+      else if (ratingStr.includes('Mature')) { rClass = 'rating-M'; rLabel = 'M'; }
+      else if (ratingStr.includes('Explicit')) { rClass = 'rating-E'; rLabel = 'E'; }
+
+      const isSelected = selectedWorkIds.has(work.id);
+
+      return `
+        <article id="card-${work.id}" 
+          onmousedown="startLongPress('${work.id}')" onmouseup="cancelLongPress()" mouseleave="cancelLongPress()"
+          ontouchstart="startLongPress('${work.id}')" ontouchend="cancelLongPress()"
+          onclick="handleCardClick(event, '${work.id}')"
+          class="bg-white rounded-xl border ${isSelected ? 'border-ao3-red bg-red-50/30' : 'border-slate-200'} shadow-sm p-3.5 space-y-2.5 relative transition duration-150 cursor-pointer">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-start gap-2.5">
+              ${selectionMode ? `
+                <div class="mt-0.5 w-5 h-5 rounded border flex items-center justify-center ${isSelected ? 'bg-ao3-red border-ao3-red text-white' : 'border-slate-300 bg-white'}">
+                  ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 stroke-[3]"></i>' : ''}
+                </div>
+              ` : `<span class="rating-badge ${rClass} mt-0.5">${rLabel}</span>`}
+              <div>
+                <h3 class="font-serif font-bold text-sm text-ao3-red leading-snug">${escapeHTML(work.title)}</h3>
+                <p class="text-[11px] text-slate-500 font-medium">by ${escapeHTML(work.author)}</p>
+              </div>
+            </div>
+            ${!selectionMode ? `
+              <div class="flex gap-1">
+                <button onclick="event.stopPropagation(); openReader('${work.id}')" class="px-2.5 py-1 bg-ao3-red text-white text-xs font-semibold rounded-lg shadow-sm">Read</button>
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="text-[11px] text-slate-700 pt-1 border-t border-slate-100">
+            <span class="text-slate-400 font-medium">Fandom:</span> <strong class="text-slate-800">${work.fandoms.join(', ')}</strong>
+          </div>
+
+          ${(work.relationships && work.relationships.length > 0) ? `
+            <div class="text-[11px] text-slate-700">
+              <span class="text-slate-400 font-medium">Pairing:</span> <strong class="text-ao3-tagRel">${work.relationships.join(', ')}</strong>
+            </div>
+          ` : ''}
+
+          ${(work.tags && work.tags.length > 0) ? `
+            <div class="flex flex-wrap gap-1.5 text-[10px] pt-0.5">
+              ${work.tags.map(t => `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">${escapeHTML(t)}</span>`).join('')}
+            </div>
+          ` : ''}
+
+          <div class="bg-slate-50 border-l-2 border-ao3-red p-2.5 rounded-r text-[11px] text-slate-600 italic line-clamp-3">${work.summary}</div>
+          
+          <div class="flex items-center justify-between text-[10px] text-slate-400 pt-1.5 border-t border-slate-100">
+            <span>${(work.words || 0).toLocaleString()} words • ${work.chaptersCount} chap</span>
+            <span>Progress: Chap ${work.lastReadChapter + 1}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function startLongPress(id) {
+      cancelLongPress();
+      longPressTimer = setTimeout(() => { enterSelectionMode(id); }, 500);
+    }
+    function cancelLongPress() {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    }
+    function enterSelectionMode(initialId) {
+      selectionMode = true; selectedWorkIds.clear();
+      if (initialId) selectedWorkIds.add(initialId);
+      document.getElementById('standard-app-bar').classList.add('hidden');
+      document.getElementById('selection-app-bar').classList.remove('hidden');
+      updateSelectionUI();
+    }
+    function exitSelectionMode() {
+      selectionMode = false; selectedWorkIds.clear();
+      document.getElementById('selection-app-bar').classList.add('hidden');
+      document.getElementById('standard-app-bar').classList.remove('hidden');
+      renderLibraryUI();
+    }
+    function handleCardClick(event, id) {
+      if (selectionMode) { event.stopPropagation(); toggleSelectWork(id); }
+      else { openReader(id); }
+    }
+    function toggleSelectWork(id) {
+      if (selectedWorkIds.has(id)) { selectedWorkIds.delete(id); }
+      else { selectedWorkIds.add(id); }
+      if (selectedWorkIds.size === 0) exitSelectionMode();
+      else updateSelectionUI();
+    }
+    function toggleSelectAll() {
+      const currentFiltered = getFilteredWorks();
+      if (selectedWorkIds.size === currentFiltered.length) { selectedWorkIds.clear(); }
+      else { currentFiltered.forEach(w => selectedWorkIds.add(w.id)); }
+      updateSelectionUI();
+    }
+    function updateSelectionUI() {
+      document.getElementById('selected-count-text').textContent = `${selectedWorkIds.size} selected`;
+      const currentFiltered = getFilteredWorks();
+      const allSelected = currentFiltered.length > 0 && selectedWorkIds.size === currentFiltered.length;
+      document.getElementById('select-all-btn').textContent = allSelected ? 'Deselect All' : 'Select All';
+      renderLibraryUI();
+    }
+    async function deleteSelectedWorks() {
+      if (selectedWorkIds.size === 0) return;
+      if (confirm(`Permanently delete ${selectedWorkIds.size} selected story file(s) from device storage?`)) {
+        for (let id of selectedWorkIds) { await deleteWorkFromDB(id); }
+        exitSelectionMode();
+        await refreshLibrary();
+      }
+    }
+    async function clearIndexedDB() {
+      if (confirm("Permanently remove all local files?")) {
+        await clearDB();
+        await refreshLibrary();
+        closeStorageModal();
+      }
+    }
+
+    function openReader(workId) {
+      activeWork = loadedWorks.find(w => w.id === workId);
+      if (!activeWork) return;
+      activeChapIndex = activeWork.lastReadChapter || 0;
+      document.getElementById('reader-top-title').textContent = activeWork.title;
+      document.getElementById('reader-title').textContent = activeWork.title;
+      document.getElementById('reader-author').textContent = `by ${activeWork.author}`;
+      
+      // Enclosed Chapter Metadata Box with Summary included properly
+      document.getElementById('reader-tags-box').innerHTML = `
+        <div class="flex flex-wrap gap-1.5 items-center">
+          <span class="font-bold text-slate-500">Rating:</span> <span class="bg-slate-200 px-1.5 py-0.5 rounded text-[10px]">${activeWork.rating}</span>
+          <span class="font-bold text-slate-500 ml-2">Fandom:</span> <span>${activeWork.fandoms.join(', ')}</span>
+        </div>
+        ${activeWork.relationships && activeWork.relationships.length ? `
+          <div class="flex flex-wrap gap-1 items-center">
+            <span class="font-bold text-slate-500">Pairing:</span> <strong class="text-ao3-tagRel">${activeWork.relationships.join(', ')}</strong>
+          </div>
+        ` : ''}
+        ${activeWork.tags && activeWork.tags.length ? `
+          <div class="flex flex-wrap gap-1 pt-1">
+            ${activeWork.tags.map(t => `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] border border-slate-200">${escapeHTML(t)}</span>`).join('')}
+          </div>
+        ` : ''}
+      `;
+      document.getElementById('reader-summary-box').innerHTML = `<strong class="text-slate-700">Summary:</strong> ${activeWork.summary}`;
+      
+      const drop = document.getElementById('reader-chapter-dropdown');
+      drop.innerHTML = activeWork.chapters.map((c, i) => `<option value="${i}">${c.title || `Chapter ${i+1}`}</option>`).join('');
+      renderChapterBody();
+      document.getElementById('reader-view').classList.remove('hidden');
+    }
+
+    function closeReaderView() {
+      document.getElementById('reader-view').classList.add('hidden');
+      activeWork = null;
+    }
+
+    async function renderChapterBody() {
+      if (!activeWork || !activeWork.chapters[activeChapIndex]) return;
+      const chap = activeWork.chapters[activeChapIndex];
+      document.getElementById('reader-chapter-dropdown').value = activeChapIndex;
+      document.getElementById('btn-prev-chap').disabled = (activeChapIndex === 0);
+      document.getElementById('btn-next-chap').disabled = (activeChapIndex === activeWork.chapters.length - 1);
+      document.getElementById('btn-bottom-prev').disabled = (activeChapIndex === 0);
+      document.getElementById('btn-bottom-next').disabled = (activeChapIndex === activeWork.chapters.length - 1);
+      document.getElementById('reader-content-body').innerHTML = chap.content;
+      document.getElementById('reader-view').scrollTo({ top: 0, behavior: 'smooth' });
+      activeWork.lastReadChapter = activeChapIndex;
+      await saveWorkToDB(activeWork);
+    }
+
+    function navigateChapter(dir) {
+      const target = activeChapIndex + dir;
+      if (target >= 0 && target < activeWork.chapters.length) {
+        activeChapIndex = target;
+        renderChapterBody();
+      }
+    }
+    function onChapterSelect(val) { activeChapIndex = parseInt(val); renderChapterBody(); }
+    function toggleSearchBar() { document.getElementById('search-panel').classList.toggle('hidden'); }
+    function clearSearch() { document.getElementById('search-input').value = ''; applyFilters(); }
+    function toggleReaderSettings() { document.getElementById('reader-settings-panel').classList.toggle('hidden'); }
+    
+    function setReaderTheme(theme) {
+      const rv = document.getElementById('reader-view');
+      rv.className = rv.className.replace(/theme-\w+/g, '');
+      rv.classList.add(`theme-${theme}`);
+    }
+    function setReaderFont(fontClass) {
+      const b = document.getElementById('reader-content-body');
+      b.className = b.className.replace(/font-\w+/g, '');
+      b.classList.add(fontClass);
+    }
+    function setReaderFontSize(sz) {
+      document.getElementById('reader-content-body').style.fontSize = `${sz}px`;
+      document.getElementById('font-size-label').textContent = `${sz}px`;
+    }
+    function openFilterModal() { document.getElementById('filter-modal').classList.remove('hidden'); }
+    function closeFilterModal() { document.getElementById('filter-modal').classList.add('hidden'); }
+    function openStorageModal() { document.getElementById('storage-modal').classList.remove('hidden'); }
+    function closeStorageModal() { document.getElementById('storage-modal').classList.add('hidden'); }
+    function applyFilters() { renderLibraryUI(); }
+    function resetFilters() {
+      document.getElementById('search-input').value = '';
+      document.getElementById('min-words-input').value = '';
+      document.getElementById('max-words-input').value = '';
+      document.querySelectorAll('.filter-rating-cb').forEach(c => c.checked = false);
+      document.querySelector('input[name="completion-filter"][value="all"]').checked = true;
+      renderLibraryUI();
+    }
+    function escapeHTML(s) {
+      return s ? s.replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','&#39;':'&#39;','"':'&quot;'}[c])) : '';
+    }
+  </script>
+</body>
+</html>
