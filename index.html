@@ -91,7 +91,7 @@
 </head>
 <body class="bg-slate-200 text-slate-900 min-h-screen flex justify-center items-center p-0 sm:p-4 font-sans">
 
-  <div class="w-full max-w-md h-screen sm:h-[844px] bg-slate-50 flex flex-col shadow-2xl sm:rounded-3xl overflow-hidden relative border border-slate-300">
+  <div class="w-full max-w-md h-screen sm:h-[844px] bg-slate-55 flex flex-col shadow-2xl sm:rounded-3xl overflow-hidden relative border border-slate-300">
 
     <header id="standard-app-bar" class="bg-ao3-red text-white px-4 py-3 flex items-center justify-between shadow-md shrink-0 z-20">
       <div class="flex items-center space-x-2.5">
@@ -146,7 +146,7 @@
       </div>
     </div>
 
-    <main class="flex-1 overflow-y-auto px-3 py-3 space-y-3 relative pb-20" id="main-feed">
+    <main class="flex-1 overflow-y-auto px-3 py-3 space-y-3 relative pb-20 bg-slate-50" id="main-feed">
       <div class="flex items-center justify-between text-xs text-slate-500 bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
         <span>Stored: <strong id="work-count-text" class="text-ao3-red">0</strong> works</span>
         <div class="flex items-center gap-1.5">
@@ -545,13 +545,11 @@
             return null;
           };
 
-          // Extract title if present
           const extractedTitle = doc.querySelector('h1.title') || doc.querySelector('h1');
           if (i === 0 && extractedTitle && extractedTitle.textContent.trim()) {
             title = extractedTitle.textContent.trim();
           }
 
-          // Extract author from metadata or byline
           const extractedAuthor = getMetaValue('Author:') || getMetaValue('by');
           if (extractedAuthor) {
             author = extractedAuthor.replace(/^by\s+/i, '').trim();
@@ -577,7 +575,7 @@
           const t = getMetaValue('Tags:'); 
           if (t) tags = t.split(',').map(s => s.trim()).filter(Boolean);
 
-          // Extract summary from any matching summary container or blockquote
+          // Bulletproof summary extraction targeting both standalone title pages and in-chapter headers
           if (!summary) {
             const sumNode = doc.querySelector('.summary blockquote') || 
                             doc.querySelector('blockquote.summary') || 
@@ -607,10 +605,8 @@
               cTitle = header.textContent.trim();
             }
 
-            // Clean up the chapter content: if the file contains the title/author/summary preface, keep it as part of the chapter body separated with a horizontal rule `<hr>` instead of hiding the file entirely!
             let chapterHtml = doc.body.innerHTML;
             if (i === 0 && htmlFiles.length > 1) {
-              // Wrap preface items cleanly or insert a separator if it contains summary/notes
               chapterHtml = `<div class="mb-6 p-3 bg-slate-100 rounded-lg text-xs italic text-slate-700">${chapterHtml}</div><hr class="my-6 border-slate-300">`;
             }
 
